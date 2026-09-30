@@ -1,3 +1,4 @@
 @tailwind base;@tailwind components;@tailwind utilities;
-body{@apply bg-bg text-white font-body antialiased}
+body{@apply bg-bg text-[#F5F5F5] font-body text-sm antialiased tabular-nums}
 input,select{color-scheme:dark}
+button,a,tr{transition:background-color .15s,color .15s,border-color .15s}
