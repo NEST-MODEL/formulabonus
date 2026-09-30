@@ -1,2 +1,3 @@
 @tailwind base;@tailwind components;@tailwind utilities;
-body{@apply bg-chalk text-ink font-body antialiased}
+body{@apply bg-bg text-white font-body antialiased}
+input,select{color-scheme:dark}

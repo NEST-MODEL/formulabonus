@@ -1,3 +1,3 @@
 export default { content:['./index.html','./src/**/*.{ts,tsx}'],
-theme:{extend:{colors:{ink:'#1B1F4B',chalk:'#EEF1F6',volt:'#2E4BFF',amber:'#FFB020',mint:'#12B886'},
+theme:{extend:{colors:{bg:'#0A0A0B',card:'#151517',line:'#26262B',gold:'#FFD21F',mute:'#8B8B93'},
 fontFamily:{display:['Unbounded','sans-serif'],body:['Manrope','sans-serif']}}},plugins:[] }
