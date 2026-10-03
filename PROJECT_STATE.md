@@ -1,39 +1,21 @@
 # PROJECT_STATE — Formula Bonus
+Сайт: https://nest-model.github.io/formulabonus/ (репо NEST-MODEL/formulabonus, деплой GitHub Actions → Pages). Стек: React+TS+Vite+Tailwind, Supabase (Auth+Postgres+RPC+RLS), PWA. Секреты в GitHub: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (publishable key).
 
-## Этапы 1–3 — готовы (build без ошибок)
-- Vite + React + TS + Tailwind, сборка без ошибок (`npm run build`).
-- UI на demo-данных (без БД): переключатель «Клиент (телефон) / Сотрудник (ПК)».
-  - Клиент: баланс, action-карточки (сгорание, продление, реферал), Formula Store с лимитом Bonus, выдача кода, история.
-  - Админ: KPI-заглушки + поле быстрого списания (пока не подключено).
-- Supabase-схема: `supabase/migrations/001_schema.sql` (таблицы, RLS, RPC).
+## Готово (в коде, build ок)
+- Вход/регистрация (имя, телефон, почта, пароль, код друга). Первый пользователь = admin, остальные client. Staff: `update profiles set role='staff' ...`.
+- src/ui.tsx — дизайн-система (Btn, Input, Select, Badge, Card, Table+пагинация, Modal/Drawer, Tabs, Toast, Shell, CSV). Чёрно-жёлтый, Inter, Lucide.
+- src/admin.tsx — Обзор (KPI, графики, «Требует внимания»), Списание (4-значный код), Клиенты (таблица + drawer: абонемент/начисление/история/рефералы), Магазин (CRUD), Акции, Рефералы, Операции (фильтры, CSV).
+- src/client.tsx — Главная, История, Магазин (код 4 цифры), Профиль; src/api.ts — все вызовы Supabase; src/App.tsx — auth + роутинг по роли.
+- supabase/migrations 001–005 (схема, RLS, RPC, seed, 4-значные коды, акции, admin_stats(p_days)). Все применять по порядку в SQL Editor. Confirm email в Supabase выключен.
 
-## Структура
-- src/App.tsx (Client, Admin), src/demo.ts, src/lib.ts (supabase client, kzt, maxBonus), src/index.css
-- supabase/migrations/001_schema.sql
-- tailwind.config.js (цвета ink/chalk/volt/amber/mint; шрифты Unbounded + Manrope)
-
-## Supabase schema
-Таблицы: profiles, memberships, bonus_wallets, bonus_transactions (ledger, accrual-строки = партии с remaining/expires_at), rewards, redemptions, referrals, audit_logs.
-RPC (security definer): create_redemption(reward), confirm_redemption(code) — FIFO по сроку, лимит max_bonus_pct, accrue_bonus(client, purchase, pct), expire_bonus() (только для cron).
-RLS: клиент читает своё, staff читает всё, прямых записей в ledger/wallet нет.
-
-## Env (без секретов)
-VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (см. .env.example). Без них приложение работает на demo-данных.
-
-## Что работает (Этап 4, demo удалён)
-- Регистрация/вход (почта+пароль+имя+телефон+код друга). Первый пользователь = admin, остальные = client (триггер handle_new_user, миграция 003).
-- Клиент: баланс, сгорающие Bonus, абонемент, Formula Store, код списания со статусом, история, реферальный код.
-- Админ: Dashboard (реальные KPI через admin_stats, списки «абонемент/Bonus заканчиваются», сгорание), Списание по коду, Клиенты (поиск, продажа/продление абонемента sell_membership с +5% и реферальными бонусами 3000/1000, начисление за покупку), Магазин (добавить/скрыть), Рефералы, Транзакции.
-- Всё пишется в БД через RPC + RLS. Деплой: .github/workflows/deploy.yml.
-
-## Этап 6 — redesign (готово, build ок)
-- Дизайн-система src/ui.tsx (Btn, Input, Select, Badge, Card, Table+pagination, Modal/Drawer, Tabs, Toast, Shell, CSV). Inter, Lucide, radius 8–12px, токены в tailwind.config.js.
-- src/admin.tsx: Обзор (KPI, графики из реальных транзакций, «Требует внимания», период 7/30/90), Списание (4-значный код), Клиенты (таблица, поиск, фильтр, drawer с абонементом/Bonus/рефералами, CSV), Магазин (таблица + modal), Акции (тип/размер/срок), Рефералы (статистика + таблица), Операции (фильтры + CSV).
-- src/client.tsx: мобильный клиент (нижнее меню), блок «Пригласи друга» со статусами друзей, акции.
-- Миграции: 004 (коды, акции), 005 (admin_stats(p_days), поля акций).
+## Готово: годовой абонемент / 30 дней / реферал 2 000 / PWA (build ок)
+- Миграция `006_annual_referral.sql` (применить в Supabase после 004, 005). Протестирована на локальном Postgres 16: годовой = ровно +10 000 (партия annual, pending), повторная продажа блокируется, реферал +2 000 только пригласившему (друг 0, повторно не начисляется), первое списание активирует партию на 30 дней (дата активации и конца сохраняются), второе списание срок не продлевает, просроченный остаток сгорает (`expire_my_bonus`, запись «сгорание» в истории).
+- UI клиента: «N бонусов», «Бонусы активируются при первом использовании», «Действуют до: DD.MM.YYYY · Осталось: XX дн.», список партий «Мои бонусы», подписи в истории, реферал «+2 000 бонусов за приглашение друга». Админ: выбор «Обычный / Годовой (+10 000 Bonus)» в drawer клиента (для годового 5% не начисляется).
+- PWA: public/manifest.json (start_url/scope `/formulabonus/`, standalone), иконки PNG 192/512/maskable/apple-touch, sw.js (scope-aware), регистрация через BASE_URL, vite base `/formulabonus/`, кнопка «📲 Установить Formula Bonus» (Android — beforeinstallprompt, iOS — инструкция, скрыта в standalone).
 
 ## Осталось
-Колонка «Остаток» в магазине (нет данных), «Использования» акций (нет данных), добавление клиента админом (нужен service role/Edge Function), QR, pg_cron для сгорания, назначение сотрудников из UI.
+Применить миграции 004–006 в Supabase, залить zip в репо (не потерять `.github/workflows/deploy.yml`), проверить установку PWA на телефоне. Не сделано: QR (реферальная ссылка), остатки товаров, добавление клиента админом, pg_cron для сгорания, назначение сотрудников из UI.
 
-## Следующий шаг
-Применить 004 и 005, сквозной тест.
+## Заметки / риски
+- Бизнес-риск: лимит списания 10–15% цены товара/абонемента → 10 000 Bonus за 30 дней почти не потратить; решение — поставить товарам больший % Bonus в «Магазине».
+- Не сделано: QR (идея — QR реферальной ссылки), остатки товаров, добавление клиента админом, pg_cron для сгорания, назначение сотрудников из UI.
