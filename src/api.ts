@@ -6,7 +6,9 @@ export const dmy = (t: string | number) => new Date(t).toLocaleDateString('ru-RU
 export type Reward = { id: string; title: string; price: number; pct: number; active?: boolean }
 export type Promo = { id: string; title: string; body: string; active: boolean; kind?: string; value?: string; ends_on?: string | null }
 export type Snap = { batches: Batch[]; phone: string; promos: Promo[]; name: string; code: string; balance: number; expiring: { amount: number; days: number } | null; daysLeft: number | null; tx: Tx[]; rewards: Reward[] }
-export type Preview = { code: string; client: string; balance: number; reward: string; price: number; bonus: number }
+export type Plan = { id: string; name: string; days: number; price: number; annual: boolean; max_bonus_pct: number; active: boolean }
+export const guessPlan = (plans: Plan[], m?: { plan_id?: string | null; annual?: boolean }) => (m && (plans.find(p => p.id === m.plan_id) ?? plans.find(p => p.annual === !!m.annual))) || plans[0]
+export type Preview = { plan?: boolean; code: string; client: string; balance: number; reward: string; price: number; bonus: number }
 const DAY = 864e5
 export const fmt = (t: string | number) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 const ok = <T,>(r: { data: T; error: any }) => { if (r.error) throw new Error(r.error.message); return r.data }
@@ -41,10 +43,10 @@ export const api = {
   redeem: async (id: string) => ok(await S.rpc('create_redemption', { p_reward: id })) as string,
   status: async (c: string) => { const { data } = await S.from('redemptions').select('status,bonus_used').eq('code', c).order('created_at', { ascending: false }).limit(1).maybeSingle(); return { status: data?.status ?? 'pending', used: data?.bonus_used ?? 0 } },
   preview: async (c: string): Promise<Preview> => {
-    const { data, error } = await S.from('redemptions').select('code,client_id,rewards(title,price,max_bonus_pct),profiles!client_id(full_name)').eq('code', c.trim().toUpperCase()).eq('status', 'pending').gt('expires_at', new Date().toISOString()).single()
+    const { data, error } = await S.from('redemptions').select('code,client_id,rewards(title,price,max_bonus_pct),plans(name,price,max_bonus_pct),profiles!client_id(full_name)').eq('code', c.trim().toUpperCase()).eq('status', 'pending').gt('expires_at', new Date().toISOString()).single()
     if (error || !data) throw new Error('Код не найден или уже использован')
     const d: any = data, { data: w } = await S.from('bonus_transactions').select('remaining').eq('client_id', d.client_id).gt('remaining', 0).or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`), balance = (w ?? []).reduce((s: number, x: any) => s + x.remaining, 0)
-    return { code: d.code, client: d.profiles?.full_name ?? '—', balance, reward: d.rewards.title, price: d.rewards.price, bonus: Math.min(Math.floor(d.rewards.price * d.rewards.max_bonus_pct / 100), balance) }
+    return { code: d.code, client: d.profiles?.full_name ?? '—', balance, plan: !!d.plans, reward: d.plans ? 'Продление: ' + d.plans.name : d.rewards.title, price: (d.plans ?? d.rewards).price, bonus: Math.min(Math.floor((d.plans ?? d.rewards).price * (d.plans ?? d.rewards).max_bonus_pct / 100), balance) }
   },
   confirm: async (c: string) => ok(await S.rpc('confirm_redemption', { p_code: c.trim().toUpperCase() })) as number,
   // ---- admin ----
@@ -57,13 +59,19 @@ export const api = {
     return list.map(x => { const ms = (m.data ?? []).filter((y: any) => y.client_id === x.id), a = ms.find((y: any) => y.status === 'active')
       return { ...x, balance: (w.data ?? []).find((y: any) => y.client_id === x.id)?.balance ?? 0, purchases: ms.length, last: ms.map((y: any) => y.starts_on).sort().pop() ?? null, left: a ? Math.ceil((+new Date(a.ends_on) - Date.now()) / DAY) : null } })
   },
-  clientDetail: async (id: string) => { const [m, t, r] = await Promise.all([S.from('memberships').select('plan,price,starts_on,ends_on,status').eq('client_id', id).order('starts_on', { ascending: false }), S.from('bonus_transactions').select('kind,amount,note,created_at').eq('client_id', id).order('created_at', { ascending: false }).limit(50), S.from('referrals').select('status,created_at,nw:profiles!referred_id(full_name)').eq('referrer_id', id)]); return { m: (m.data ?? []) as any[], t: (t.data ?? []) as any[], r: (r.data ?? []) as any[] } },
+  clientDetail: async (id: string) => { const [m, t, r] = await Promise.all([S.from('memberships').select('plan,price,starts_on,ends_on,status,plan_id,annual').eq('client_id', id).order('starts_on', { ascending: false }), S.from('bonus_transactions').select('kind,amount,note,created_at').eq('client_id', id).order('created_at', { ascending: false }).limit(50), S.from('referrals').select('status,created_at,nw:profiles!referred_id(full_name)').eq('referrer_id', id)]); return { m: (m.data ?? []) as any[], t: (t.data ?? []) as any[], r: (r.data ?? []) as any[] } },
   series: async (days: number) => { const d = ok(await S.from('bonus_transactions').select('amount,created_at').gte('created_at', new Date(Date.now() - days * DAY).toISOString())) as any[], o: Record<string, any> = {}
     for (let i = days - 1; i >= 0; i--) { const k = new Date(Date.now() - i * DAY).toISOString().slice(0, 10); o[k] = { d: k, inn: 0, out: 0, n: 0 } }
     d.forEach(x => { const e = o[x.created_at.slice(0, 10)]; if (!e) return; e.n++; if (x.amount > 0) e.inn += x.amount; else e.out -= x.amount }); return Object.values(o) as { d: string; inn: number; out: number; n: number }[] },
   expiredCount: async () => { const { count } = await S.from('bonus_transactions').select('id', { count: 'exact', head: true }).gt('remaining', 0).lte('expires_at', new Date().toISOString()); return count ?? 0 },
   myRefs: async () => { const { data: { user } } = await S.auth.getUser(), id = user!.id; const [a, b] = await Promise.all([S.from('referrals').select('status').eq('referrer_id', id), S.from('referrals').select('status').eq('referred_id', id).maybeSingle()]); return { invited: (a.data ?? []) as { status: string }[], asFriend: b.data?.status as string | undefined } },
   sell: async (client: string, plan: string, price: number, days: number, annual = false) => ok(await S.rpc('sell_membership', { p_client: client, p_plan: plan, p_price: price, p_days: days, p_annual: annual })) as number,
+  plans: async () => ok(await S.from('plans').select('id,name,days,price,annual,max_bonus_pct,active').order('sort').order('days')) as Plan[],
+  lastMembership: async () => { const { data: { user } } = await S.auth.getUser(); const { data } = await S.from('memberships').select('plan_id,annual').eq('client_id', user!.id).order('starts_on', { ascending: false }).limit(1); return (data?.[0] ?? null) as { plan_id: string | null; annual: boolean } | null },
+  renew: async (plan: string) => ok(await S.rpc('create_renewal', { p_plan: plan })) as string,
+  sellPlan: async (client: string, plan: string, price: number) => ok(await S.rpc('sell_plan', { p_client: client, p_plan: plan, p_price: price })) as number,
+  addPlan: async (f: Partial<Plan> & { name: string }) => ok(await S.from('plans').insert(f)),
+  updatePlan: async (id: string, f: Partial<Plan>) => ok(await S.from('plans').update(f).eq('id', id)),
   expireMine: async () => { await S.rpc('expire_my_bonus') },
   accrue: async (client: string, purchase: number) => ok(await S.rpc('accrue_bonus', { p_client: client, p_purchase: purchase, p_pct: 5, p_note: 'Покупка в клубе' })) as number,
   allRewards: async () => (ok(await S.from('rewards').select('id,title,price,max_bonus_pct,active').order('title')) as any[]).map(rw),
