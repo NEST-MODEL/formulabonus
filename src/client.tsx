@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { ClipboardList, History, Home, LifeBuoy, ShoppingBag, Sparkles, Star, User } from 'lucide-react'
 import { Bell2, Support } from './support'
 import { CLIENT_UPDATE } from './whatsnew'
-import { Orders, Shop } from './shop'
+import { Orders, Shop, StoreCodes } from './shop'
+import { BAR_ORDERS } from './features'
 import { api, dmy, guessPlan, Snap } from './api'
 import { kzt, maxBonus, N } from './lib'
 import { Badge, Btn, Card, cx, Empty, Input, Modal, Shell, toast, useAsync } from './ui'
 
 const LBL: Record<string, string> = { new: 'оплата подтверждена', preparing: 'готовится', ready: 'готов, заберите на баре', done: 'выдан', cancelled: 'отменён' }
 export default function Client() {
-  const [s, load] = useAsync<Snap>(api.snap, 3000), [rf] = useAsync(api.myRefs, 10000), [tab, setTab] = useState('home'), [flt, setFlt] = useState('all'), [pl] = useAsync(api.plans), [lm] = useAsync(api.lastMembership), [sel, setSel] = useState(''), [ao] = useAsync(api.myOrders, 5000)
+  const [s, load] = useAsync<Snap>(api.snap, 3000), [rf] = useAsync(api.myRefs, 10000), [tab, setTab] = useState('home'), [flt, setFlt] = useState('all'), [pl] = useAsync(api.plans), [lm] = useAsync(api.lastMembership), [sel, setSel] = useState(''), [ao] = useAsync(() => BAR_ORDERS ? api.myOrders() : Promise.resolve([]), BAR_ORDERS ? 5000 : 0)
   const [code, setCode] = useState<string | null>(null), [st, setSt] = useState({ status: 'pending', used: 0 })
   useEffect(() => { if (!code || st.status === 'done') return; const t = setInterval(() => api.status(code).then(x => { setSt(x); if (x.status === 'done') load() }), 1500); return () => clearInterval(t) }, [code, st.status, load])
   const seen = useRef<Record<string, string>>({})
@@ -28,7 +29,7 @@ export default function Client() {
   const pend = s.batches.some(b => b.pending), first = s.batches.filter(b => b.expires).sort((a, b) => +new Date(a.expires!) - +new Date(b.expires!))[0]
   const copy = () => { navigator.clipboard?.writeText(s.code); toast('Код скопирован') }
   const Row = ({ h }: { h: Snap['tx'][0] }) => <div className="flex justify-between items-center border-t first:border-t-0 border-line px-4 py-3"><div><div className="font-medium">{h.text}</div><div className="text-xs text-mute">{h.date}{h.sub ? ' · ' + h.sub : ''}</div></div><b className={cx('text-[15px]', h.amount > 0 ? 'text-emerald-400' : '')}>{h.amount > 0 ? '+' : ''}{N(h.amount)}</b></div>
-  const items: [string, string, any][] = [['home', 'Главная', Home], ['history', 'История', History], ['store', 'Магазин', ShoppingBag], ['orders', 'Заказы', ClipboardList], ['support', 'Поддержка', LifeBuoy], ['profile', 'Профиль', User]]
+  const items: [string, string, any][] = [['home', 'Главная', Home], ['history', 'История', History], ['store', 'Магазин', ShoppingBag], ...(BAR_ORDERS ? [['orders', 'Заказы', ClipboardList]] as [string, string, any][] : []), ['support', 'Поддержка', LifeBuoy], ['profile', 'Профиль', User]]
   const conf = rf?.invited.filter(x => x.status === 'confirmed').length ?? 0, wait = (rf?.invited.length ?? 0) - conf
   return <Shell bottom items={items} cur={tab} set={k => { setTab(k); setCode(null) }} who={s.name || 'Клиент'} extra={<Bell2 count={unread} reload={loadUnread} go={k => { setTab(k); setCode(null) }} />}>
     {upd && <button onClick={() => setUpdOpen(true)} className="w-full max-w-2xl mb-4 text-left rounded-xl border border-gold/50 bg-gold/10 px-4 py-3 flex items-center gap-3"><Sparkles size={18} className="text-gold shrink-0" /><span className="flex-1"><b className="text-gold">ОБНОВЛЕНИЕ!</b> <span className="text-[13px]">Нажмите, чтобы узнать подробнее</span></span><span onClick={e => { e.stopPropagation(); setUpd(false) }} className="text-mute px-1" aria-label="Скрыть">✕</span></button>}
@@ -36,7 +37,7 @@ export default function Client() {
     {tab === 'support' && <Support />}
     {tab === 'home' && <div className="space-y-4 max-w-2xl">
       <div><h1 className="text-2xl font-semibold tracking-tight">Привет, {s.name}</h1><div className="text-mute mt-0.5">Копи бонусы и возвращайся за выгодой</div></div>
-      {ao?.filter(o => ['awaiting_payment', 'new', 'preparing', 'ready'].includes(o.status)).map(o => <button key={o.id} onClick={() => setTab('orders')} className="w-full text-left rounded-xl border border-gold/40 bg-gold/5 px-4 py-3"><b>Заказ #{o.num}</b> · {o.status === 'ready' ? 'готов — заберите на баре' : o.status === 'preparing' ? 'готовится' : o.status === 'awaiting_payment' ? 'ожидает оплаты' : 'оплата подтверждена'}</button>)}
+      {BAR_ORDERS && ao?.filter(o => ['awaiting_payment', 'new', 'preparing', 'ready'].includes(o.status)).map(o => <button key={o.id} onClick={() => setTab('orders')} className="w-full text-left rounded-xl border border-gold/40 bg-gold/5 px-4 py-3"><b>Заказ #{o.num}</b> · {o.status === 'ready' ? 'готов — заберите на баре' : o.status === 'preparing' ? 'готовится' : o.status === 'awaiting_payment' ? 'ожидает оплаты' : 'оплата подтверждена'}</button>)}
       <Card><div className="flex items-center gap-4 flex-wrap"><div className="w-12 h-12 rounded-lg border border-gold/40 bg-gold/10 grid place-items-center text-gold"><Star size={22} /></div>
         <div className="flex-1"><div className="text-xs text-mute">Баланс</div><div className="text-3xl font-semibold">{N(s.balance)} <span className="text-base font-normal text-mute">бонусов</span></div>{s.reserved > 0 && <div className="text-mute text-[13px] mt-0.5">Зарезервировано под заказ: {N(s.reserved)} Б</div>}{pend && <div className="text-gold text-[13px] mt-0.5">Бонусы активируются при первом использовании</div>}{first && <div className="text-gold text-[13px] mt-0.5">Действуют до: {dmy(first.expires!)} · Осталось: {first.days} дн.</div>}</div><Btn onClick={() => setTab('store')}>Обменять</Btn></div></Card>
       {s.batches.length > 0 && <Card title="Мои бонусы" pad={false}>{s.batches.map(b => <div key={b.id} className="border-t first:border-t-0 border-line px-4 py-3"><div className="font-medium">{N(b.amount)} · {b.label}</div><div className="text-xs text-mute">{b.pending ? 'Активируются при первом использовании' : `Действуют до ${dmy(b.expires!)} · осталось ${b.days} дн.`}</div></div>)}</Card>}
@@ -55,8 +56,8 @@ export default function Client() {
     {tab === 'history' && <div className="max-w-2xl space-y-3"><h1 className="text-2xl font-semibold tracking-tight">История</h1>
       <div className="flex gap-1.5">{[['all', 'Все'], ['in', 'Начисления'], ['out', 'Списания']].map(([k, l]) => <Btn key={k} v={flt === k ? 'primary' : 'secondary'} onClick={() => setFlt(k)}>{l}</Btn>)}</div>
       <Card pad={false}>{s.tx.filter(h => flt === 'all' || (flt === 'in' ? h.amount > 0 : h.amount < 0)).map(h => <Row key={h.id} h={h} />)}{!s.tx.length && <Empty>Операций пока нет</Empty>}</Card></div>}
-    {tab === 'store' && <Shop s={s} goOrders={() => setTab('orders')} />}
-    {tab === 'orders' && <Orders />}
+    {tab === 'store' && (BAR_ORDERS ? <Shop s={s} goOrders={() => setTab('orders')} /> : code ? <div className="max-w-2xl space-y-3"><h1 className="text-2xl font-semibold tracking-tight">Магазин</h1>{CodeCard}</div> : <StoreCodes s={s} onCode={c => { setCode(c); setSt({ status: 'pending', used: 0 }) }} />)}
+    {BAR_ORDERS && tab === 'orders' && <Orders />}
     {tab === 'profile' && <div className="max-w-md space-y-3"><h1 className="text-2xl font-semibold tracking-tight">Профиль</h1><Card pad={false}>{[['Имя', s.name], ['Телефон', s.phone || '—'], ['Код для друзей', s.code], ['Статус', 'Клиент']].map(([a, b]) => <div key={a} className="flex justify-between px-4 py-3 border-t first:border-t-0 border-line"><span className="text-mute">{a}</span><b className="font-medium">{b}</b></div>)}</Card>
       <Card title="Дата рождения"><div className="space-y-2"><div className="text-[13px] text-mute">Поздравим вас в ваш день 🎂</div><div className="flex gap-2"><Input type="date" max={new Date().toISOString().slice(0, 10)} value={birth ?? s.birth ?? ''} onChange={e => setBirth(e.target.value)} />
         <Btn disabled={birth === null || birth === (s.birth ?? '')} onClick={() => api.setBirth(birth).then(() => { toast('Сохранено'); setBirth(null); load() }).catch(e => toast(e.message, false))}>Сохранить</Btn></div></div></Card><Btn className="w-full" onClick={copy}>Скопировать код для друга</Btn></div>}

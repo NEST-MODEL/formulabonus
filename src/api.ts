@@ -13,6 +13,7 @@ export type Plan = { id: string; name: string; days: number; price: number; annu
 export const guessPlan = (plans: Plan[], m?: { plan_id?: string | null; annual?: boolean }) => (m && (plans.find(p => p.id === m.plan_id) ?? plans.find(p => p.annual === !!m.annual))) || plans[0]
 export type Preview = { plan?: boolean; code: string; client: string; balance: number; reward: string; price: number; bonus: number }
 export type Ticket = { id: string; type: string; category: string; description: string; status: string; client_name: string | null; phone: string | null; created_at: string }
+export type Msg = { id: string; from_staff: boolean; body: string; created_at: string }
 export type Notif = { id: string; type: string; title: string; message: string; is_read: boolean; created_at: string; metadata: Record<string, any> }
 const DAY = 864e5
 export const fmt = (t: string | number) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
@@ -108,6 +109,9 @@ export const api = {
   createTicket: async (category: string, description: string) => { const { error } = await S.rpc('create_ticket', { p_category: category, p_description: description }); if (error) throw new Error('Не удалось отправить обращение. Попробуйте ещё раз.') },
   tickets: async (type: string, status: string) => { let q = S.from('support_tickets').select('id,type,category,description,status,client_name,phone,created_at').eq('type', type).order('created_at', { ascending: false }).limit(100); if (status !== 'all') q = status === 'closed' ? q.in('status', ['resolved', 'closed']) : q.eq('status', status); return ok(await q) as Ticket[] },
   ticketCounts: async (type: string) => { const c = async (st: string[]) => (await S.from('support_tickets').select('id', { count: 'exact', head: true }).eq('type', type).in('status', st)).count ?? 0; const [a, b, d] = await Promise.all([c(['open']), c(['in_progress']), c(['resolved', 'closed'])]); return { open: a, progress: b, closed: d } },
+  myTickets: async () => { const { data: { user } } = await S.auth.getUser(); return ok(await S.from('support_tickets').select('id,type,category,description,status,client_name,phone,created_at').eq('user_id', user!.id).neq('category', 'password_reset').order('updated_at', { ascending: false }).limit(30)) as Ticket[] },
+  messages: async (ticket: string) => ok(await S.from('ticket_messages').select('id,from_staff,body,created_at').eq('ticket_id', ticket).order('created_at').limit(200)) as Msg[],
+  reply: async (ticket: string, body: string) => { const { error } = await S.rpc('reply_ticket', { p_ticket: ticket, p_body: body }); if (error) throw new Error(/закрыто|много/i.test(error.message) ? error.message : 'Не удалось отправить. Попробуйте ещё раз.') },
   setTicket: async (id: string, status: string) => ok(await S.rpc('set_ticket_status', { p_id: id, p_status: status })),
   resetPassword: async (ticket: string) => ok(await S.rpc('dev_reset_password', { p_ticket: ticket })) as string,
   // ---- уведомления ----

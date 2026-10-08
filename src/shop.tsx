@@ -63,3 +63,20 @@ export function Orders() {
   const [l, load] = useAsync(api.myOrders, 3000), [cfg] = useAsync(api.setting, 15000)
   return <div className="max-w-xl space-y-3"><h1 className="text-2xl font-semibold tracking-tight">Мои заказы</h1>{l?.map(o => <OrderCard key={o.id} o={o} cfg={cfg ?? {}} reload={load} />)}{l && !l.length && <Empty>Заказов пока нет. Выберите что-нибудь в магазине.</Empty>}</div>
 }
+
+/* Магазин по 4-значному коду (основной режим, пока BAR_ORDERS = false) */
+export function StoreCodes({ s, onCode }: { s: Snap; onCode: (code: string) => void }) {
+  const [cats] = useAsync(api.cats), [cat, setCat] = useState('all'), [busy, setBusy] = useState('')
+  const chips: [string, string][] = [['all', 'Все'], ...(cats ?? []).filter(c => s.rewards.some(r => r.cat === c.id)).map(c => [c.id, c.name] as [string, string]), ...(s.rewards.some(r => !r.cat) && (cats ?? []).length ? [['none', 'Другое'] as [string, string]] : [])]
+  const shown = s.rewards.filter(r => cat === 'all' || (cat === 'none' ? !r.cat : r.cat === cat))
+  const get = (id: string) => { setBusy(id); api.redeem(id).then(onCode).catch(e => toast(e.message, false)).finally(() => setBusy('')) }
+  return <div className="max-w-3xl space-y-3">
+    <div className="flex justify-between items-center"><h1 className="text-2xl font-semibold tracking-tight">Магазин</h1><Badge t="gold">{N(s.balance)} Bonus</Badge></div>
+    <div className="text-[13px] text-mute">Выберите товар, получите 4-значный код и назовите его администратору — Bonus спишутся, остальное оплатите на месте.</div>
+    {chips.length > 1 && <div className="flex gap-1.5 overflow-x-auto pb-1">{chips.map(([k, l]) => <Btn key={k} v={cat === k ? 'primary' : 'secondary'} onClick={() => setCat(k)}>{l}</Btn>)}</div>}
+    <div className="grid sm:grid-cols-2 gap-3">{shown.map(r => <div key={r.id} className="bg-surface border border-line rounded-xl p-4 flex flex-col gap-1.5"><div className="font-medium">{r.title}</div>{r.desc && <div className="text-xs text-mute">{r.desc}</div>}
+      <div className="text-[13px]"><b>{kzt(r.price)}</b> <span className="text-mute">· Bonus покроют до {kzt(Math.min(maxBonus(r.price, r.pct), s.balance))}</span></div>
+      <Btn className="mt-1" disabled={busy === r.id} onClick={() => get(r.id)}>Получить код</Btn></div>)}</div>
+    {!shown.length && <Empty>В этой категории пока пусто</Empty>}
+  </div>
+}

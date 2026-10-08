@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Coffee, LifeBuoy, UserCog, Download, LayoutDashboard, Package, Percent, Plus, ScrollText, Search, Share2, Users, Zap, ChevronRight } from 'lucide-react'
 import { api, Cat, fmt, guessPlan, Plan, Promo, Reward } from './api'
 import { BarBoard, PaySettings, Staff } from './bar'
+import { BAR_ORDERS } from './features'
 import { SupportAdmin } from './support'
 import { kzt, N } from './lib'
 import { act, Confirm, Badge, Btn, Card, cx, csv, Empty, Field, Input, Modal, num, PageHead, Select, Shell, Table, Tabs, useAsync } from './ui'
@@ -85,7 +86,7 @@ function Store() {
     <div className="mt-8"><h2 className="text-lg font-semibold mb-3">Категории</h2><Card pad={false}>{(cats ?? []).map(c => <div key={c.id} className="flex items-center justify-between px-4 h-11 border-t first:border-t-0 border-line"><span className={c.active ? '' : 'text-mute line-through'}>{c.name}</span><span className="inline-flex gap-1">
       <Btn v="ghost" onClick={() => { const n = window.prompt('Новое название', c.name); if (n && n.trim()) act(async () => { await api.updateCat(c.id, { name: n.trim() }); return 'Сохранено' }, loadC) }}>Переименовать</Btn><Btn v="ghost" onClick={() => act(async () => { await api.updateCat(c.id, { active: !c.active }); return 'Готово' }, loadC)}>{c.active ? 'Скрыть' : 'Показать'}</Btn><Btn v="danger" onClick={() => setDelC(c)}>Удалить</Btn></span></div>)}
       <div className="flex gap-2 p-3 border-t border-line"><Input placeholder="Новая категория (кофе, напитки, спортпит…)" value={cn} onChange={e => setCn(e.target.value)} /><Btn disabled={!cn.trim()} onClick={() => act(async () => { await api.addCat(cn.trim()); return 'Категория добавлена' }, () => { setCn(''); loadC() })}>Добавить</Btn></div></Card></div>
-    <PaySettings /><Plans />
+    {BAR_ORDERS && <PaySettings />}<Plans />
     {del && <Confirm title="Удалить товар?" text={`«${del.title}» будет удалён навсегда. История операций и заказов сохранится. Если товар нужно просто убрать из магазина, используйте «Скрыть».`} onClose={() => setDel(null)} onYes={() => act(async () => { await api.deleteReward(del.id); return 'Товар удалён' }, load)} />}
     {delC && <Confirm title="Удалить категорию?" text={`Категория «${delC.name}» будет удалена. Товары останутся, но попадут в «Без категории».`} onClose={() => setDelC(null)} onYes={() => act(async () => { await api.deleteCat(delC.id); return 'Категория удалена' }, () => { loadC(); load() })} />}
     {ed && <Modal title={ed.id ? 'Изменить товар' : 'Новый товар'} onClose={() => setEd(null)}><Field l="Название"><Input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} /></Field><Field l="Описание (необязательно)"><Input value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })} /></Field>
@@ -130,7 +131,7 @@ function Ops() {
     <Card pad={false}><Table size={15} rows={rows} cols={[{ h: 'Дата', r: x => fmt(x.created_at) }, { h: 'Клиент', r: x => x.profiles?.full_name }, { h: 'Тип', r: x => <Badge t={kindTone(x.kind)}>{KIND[x.kind]}</Badge> }, { h: 'Описание', r: x => x.note ?? '—', cls: 'hidden md:table-cell' }, { h: 'Bonus', r: x => <Amt v={x.amount} />, cls: 'text-right' }]} /></Card></div>
 }
 export default function Admin({ who, role }: { who: string; role: string }) {
-  const items: [string, string, any][] = [['overview', 'Обзор', LayoutDashboard], ['redeem', 'Списание', Zap], ['clients', 'Клиенты', Users], ['store', 'Магазин', Package], ['promos', 'Акции', Percent], ['orders', 'Заказы бара', Coffee], ['refs', 'Рефералы', Share2], ['ops', 'Операции', ScrollText], ['support', 'Поддержка', LifeBuoy], ['staff', 'Сотрудники', UserCog]]
+  const items: [string, string, any][] = [['overview', 'Обзор', LayoutDashboard], ['redeem', 'Списание', Zap], ['clients', 'Клиенты', Users], ['store', 'Магазин', Package], ['promos', 'Акции', Percent], ...(BAR_ORDERS ? [['orders', 'Заказы бара', Coffee]] as [string, string, any][] : []), ['refs', 'Рефералы', Share2], ['ops', 'Операции', ScrollText], ['support', 'Поддержка', LifeBuoy], ['staff', 'Сотрудники', UserCog]]
   const [k, setK] = useState('overview')
   return <Shell items={items} cur={k} set={setK} who={who}>{k === 'overview' ? <Overview go={setK} /> : k === 'redeem' ? <Redeem /> : k === 'clients' ? <Clients /> : k === 'store' ? <Store /> : k === 'promos' ? <Promos /> : k === 'refs' ? <Refs /> : k === 'orders' ? <BarBoard /> : k === 'staff' ? <Staff role={role} /> : k === 'support' ? <SupportAdmin role={role} /> : <Ops />}</Shell>
 }
