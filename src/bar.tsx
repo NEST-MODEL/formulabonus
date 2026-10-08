@@ -36,15 +36,16 @@ export function BarBoard() {
     <div className="mt-8"><Card title="Закрытые (последние)" pad={false}><Table size={12} rows={closed} empty="Пока нет" cols={[{ h: '№', r: x => '#' + x.num }, { h: 'Клиент', r: x => x.client_name }, { h: 'Состав', r: x => x.order_items.map(i => `${i.qty}×${i.title}`).join(', '), cls: 'hidden md:table-cell' }, { h: 'Сумма', r: x => kzt(x.total) }, { h: 'Статус', r: x => x.status === 'done' ? <Badge t="green">Выдан</Badge> : <Badge t="red">Отменён</Badge> }]} /></Card></div></div>
 }
 export function BarApp() { return <Shell items={[['b', 'Заказы', Coffee]]} cur="b" set={() => {}} who="Бармен"><BarBoard /></Shell> }
-const RL: Record<string, string> = { client: 'Клиент', staff: 'Ресепшен', bartender: 'Бармен', admin: 'Админ' }
-export function Staff() {
+const RL: Record<string, string> = { client: 'Клиент', staff: 'Ресепшен', bartender: 'Бармен', admin: 'Админ', dev: 'Разработчик' }
+export function Staff({ role: me }: { role: string }) {
+  const roles = Object.keys(RL).filter(r => me === 'dev' || r !== 'dev')
   const [l, load] = useAsync(api.staff), [c] = useAsync(api.clients), [q, setQ] = useState(''), [role, setRole] = useState('bartender'), set = (id: string, r: string) => api.setRole(id, r).then(() => { toast('Роль изменена'); load() }).catch(e => toast(e.message, false))
   const found = q.trim() ? (c ?? []).filter(x => (x.full_name + (x.phone ?? '')).toLowerCase().includes(q.toLowerCase())).slice(0, 6) : []
   return <div className="space-y-4"><PageHead title="Сотрудники" />
     <Card title="Добавить сотрудника"><div className="space-y-3"><div className="text-[13px] text-mute">Человек сначала регистрируется сам, затем вы находите его здесь и назначаете роль. Бармен видит только заказы бара.</div>
-      <div className="flex flex-wrap gap-2"><Input className="max-w-xs" placeholder="Имя или телефон" value={q} onChange={e => setQ(e.target.value)} /><Select value={role} onChange={e => setRole(e.target.value)}>{['bartender', 'staff', 'admin'].map(r => <option key={r} value={r}>{RL[r]}</option>)}</Select></div>
+      <div className="flex flex-wrap gap-2"><Input className="max-w-xs" placeholder="Имя или телефон" value={q} onChange={e => setQ(e.target.value)} /><Select value={role} onChange={e => setRole(e.target.value)}>{roles.filter(r => r !== 'client').map(r => <option key={r} value={r}>{RL[r]}</option>)}</Select></div>
       {found.map(x => <div key={x.id} className="flex items-center justify-between border-t border-line pt-2"><span>{x.full_name} <span className="text-mute text-xs">{x.phone ?? ''}</span></span><Btn onClick={() => set(x.id, role).then(() => setQ(''))}>Назначить: {RL[role]}</Btn></div>)}</div></Card>
-    <Card title="Команда" pad={false}><Table rows={l ?? []} cols={[{ h: 'Имя', r: x => <b className="font-medium">{x.full_name}</b> }, { h: 'Телефон', r: x => x.phone ?? '—' }, { h: 'Роль', r: x => <Select value={x.role} onChange={e => set(x.id, e.target.value)}>{Object.entries(RL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select> }]} /></Card></div>
+    <Card title="Команда" pad={false}><Table rows={l ?? []} cols={[{ h: 'Имя', r: x => <b className="font-medium">{x.full_name}</b> }, { h: 'Телефон', r: x => x.phone ?? '—' }, { h: 'Роль', r: x => x.role === 'dev' && me !== 'dev' ? <Badge>{RL.dev}</Badge> : <Select value={x.role} onChange={e => set(x.id, e.target.value)}>{roles.map(k => <option key={k} value={k}>{RL[k]}</option>)}</Select> }]} /></Card></div>
 }
 export function PaySettings() {
   const [c, load] = useAsync(api.setting), [u, setU] = useState<string | null>(null)

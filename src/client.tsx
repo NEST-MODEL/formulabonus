@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { ClipboardList, History, Home, ShoppingBag, Star, User } from 'lucide-react'
+import { ClipboardList, History, Home, LifeBuoy, ShoppingBag, Sparkles, Star, User } from 'lucide-react'
+import { Bell2, Support } from './support'
+import { CLIENT_UPDATE } from './whatsnew'
 import { Orders, Shop } from './shop'
 import { api, dmy, guessPlan, Snap } from './api'
 import { kzt, maxBonus, N } from './lib'
-import { Badge, Btn, Card, cx, Empty, Shell, toast, useAsync } from './ui'
+import { Badge, Btn, Card, cx, Empty, Input, Modal, Shell, toast, useAsync } from './ui'
 
 const LBL: Record<string, string> = { new: 'оплата подтверждена', preparing: 'готовится', ready: 'готов, заберите на баре', done: 'выдан', cancelled: 'отменён' }
 export default function Client() {
@@ -12,6 +14,13 @@ export default function Client() {
   useEffect(() => { if (!code || st.status === 'done') return; const t = setInterval(() => api.status(code).then(x => { setSt(x); if (x.status === 'done') load() }), 1500); return () => clearInterval(t) }, [code, st.status, load])
   const seen = useRef<Record<string, string>>({})
   useEffect(() => { ao?.forEach(o => { const p = seen.current[o.id]; if (p && p !== o.status) toast(`Заказ #${o.num}: ${LBL[o.status] ?? o.status}`); seen.current[o.id] = o.status }) }, [ao])
+  // уведомления: генерация один раз при открытии, счётчик — при открытии и возврате в приложение (без постоянного опроса)
+  const [unread, setUnread] = useState(0), loadUnread = () => { api.unread().then(setUnread).catch(() => {}) }
+  useEffect(() => { api.syncNotifications().catch(() => {}).finally(loadUnread); const f = () => { if (document.visibilityState === 'visible') loadUnread() }; document.addEventListener('visibilitychange', f); return () => document.removeEventListener('visibilitychange', f) }, []) // eslint-disable-line
+  // плашка «ОБНОВЛЕНИЕ!» — один раз на каждое обновление
+  const [upd, setUpd] = useState(() => { try { return localStorage.getItem('fb-update-seen') !== CLIENT_UPDATE.id } catch { return false } }), [updOpen, setUpdOpen] = useState(false)
+  useEffect(() => { if (upd) try { localStorage.setItem('fb-update-seen', CLIENT_UPDATE.id) } catch { /* ignore */ } }, []) // eslint-disable-line
+  const [birth, setBirth] = useState<string | null>(null)
   useEffect(() => { api.expireMine().then(load).catch(() => {}) }, []) // eslint-disable-line
   if (!s) return <div className="p-8 text-center text-mute">Загрузка…</div>
   const plans = pl ?? [], cur = plans.length ? guessPlan(plans, lm ?? undefined) : undefined, chosen = plans.find(p => p.id === (sel || cur?.id)), cbonus = chosen ? Math.min(maxBonus(chosen.price, chosen.max_bonus_pct), s.balance) : 0
@@ -19,9 +28,12 @@ export default function Client() {
   const pend = s.batches.some(b => b.pending), first = s.batches.filter(b => b.expires).sort((a, b) => +new Date(a.expires!) - +new Date(b.expires!))[0]
   const copy = () => { navigator.clipboard?.writeText(s.code); toast('Код скопирован') }
   const Row = ({ h }: { h: Snap['tx'][0] }) => <div className="flex justify-between items-center border-t first:border-t-0 border-line px-4 py-3"><div><div className="font-medium">{h.text}</div><div className="text-xs text-mute">{h.date}{h.sub ? ' · ' + h.sub : ''}</div></div><b className={cx('text-[15px]', h.amount > 0 ? 'text-emerald-400' : '')}>{h.amount > 0 ? '+' : ''}{N(h.amount)}</b></div>
-  const items: [string, string, any][] = [['home', 'Главная', Home], ['history', 'История', History], ['store', 'Магазин', ShoppingBag], ['orders', 'Заказы', ClipboardList], ['profile', 'Профиль', User]]
+  const items: [string, string, any][] = [['home', 'Главная', Home], ['history', 'История', History], ['store', 'Магазин', ShoppingBag], ['orders', 'Заказы', ClipboardList], ['support', 'Поддержка', LifeBuoy], ['profile', 'Профиль', User]]
   const conf = rf?.invited.filter(x => x.status === 'confirmed').length ?? 0, wait = (rf?.invited.length ?? 0) - conf
-  return <Shell bottom items={items} cur={tab} set={k => { setTab(k); setCode(null) }} who={s.name || 'Клиент'}>
+  return <Shell bottom items={items} cur={tab} set={k => { setTab(k); setCode(null) }} who={s.name || 'Клиент'} extra={<Bell2 count={unread} reload={loadUnread} go={k => { setTab(k); setCode(null) }} />}>
+    {upd && <button onClick={() => setUpdOpen(true)} className="w-full max-w-2xl mb-4 text-left rounded-xl border border-gold/50 bg-gold/10 px-4 py-3 flex items-center gap-3"><Sparkles size={18} className="text-gold shrink-0" /><span className="flex-1"><b className="text-gold">ОБНОВЛЕНИЕ!</b> <span className="text-[13px]">Нажмите, чтобы узнать подробнее</span></span><span onClick={e => { e.stopPropagation(); setUpd(false) }} className="text-mute px-1" aria-label="Скрыть">✕</span></button>}
+    {updOpen && <Modal title={CLIENT_UPDATE.title} onClose={() => { setUpdOpen(false); setUpd(false) }}><ul className="space-y-2 text-[13px]">{CLIENT_UPDATE.items.map(x => <li key={x} className="flex gap-2"><span className="text-gold">•</span><span>{x}</span></li>)}</ul><Btn className="w-full" onClick={() => { setUpdOpen(false); setUpd(false) }}>Понятно</Btn></Modal>}
+    {tab === 'support' && <Support />}
     {tab === 'home' && <div className="space-y-4 max-w-2xl">
       <div><h1 className="text-2xl font-semibold tracking-tight">Привет, {s.name}</h1><div className="text-mute mt-0.5">Копи бонусы и возвращайся за выгодой</div></div>
       {ao?.filter(o => ['awaiting_payment', 'new', 'preparing', 'ready'].includes(o.status)).map(o => <button key={o.id} onClick={() => setTab('orders')} className="w-full text-left rounded-xl border border-gold/40 bg-gold/5 px-4 py-3"><b>Заказ #{o.num}</b> · {o.status === 'ready' ? 'готов — заберите на баре' : o.status === 'preparing' ? 'готовится' : o.status === 'awaiting_payment' ? 'ожидает оплаты' : 'оплата подтверждена'}</button>)}
@@ -45,6 +57,8 @@ export default function Client() {
       <Card pad={false}>{s.tx.filter(h => flt === 'all' || (flt === 'in' ? h.amount > 0 : h.amount < 0)).map(h => <Row key={h.id} h={h} />)}{!s.tx.length && <Empty>Операций пока нет</Empty>}</Card></div>}
     {tab === 'store' && <Shop s={s} goOrders={() => setTab('orders')} />}
     {tab === 'orders' && <Orders />}
-    {tab === 'profile' && <div className="max-w-md space-y-3"><h1 className="text-2xl font-semibold tracking-tight">Профиль</h1><Card pad={false}>{[['Имя', s.name], ['Телефон', s.phone || '—'], ['Код для друзей', s.code], ['Статус', 'Клиент']].map(([a, b]) => <div key={a} className="flex justify-between px-4 py-3 border-t first:border-t-0 border-line"><span className="text-mute">{a}</span><b className="font-medium">{b}</b></div>)}</Card><Btn className="w-full" onClick={copy}>Скопировать код для друга</Btn></div>}
+    {tab === 'profile' && <div className="max-w-md space-y-3"><h1 className="text-2xl font-semibold tracking-tight">Профиль</h1><Card pad={false}>{[['Имя', s.name], ['Телефон', s.phone || '—'], ['Код для друзей', s.code], ['Статус', 'Клиент']].map(([a, b]) => <div key={a} className="flex justify-between px-4 py-3 border-t first:border-t-0 border-line"><span className="text-mute">{a}</span><b className="font-medium">{b}</b></div>)}</Card>
+      <Card title="Дата рождения"><div className="space-y-2"><div className="text-[13px] text-mute">Поздравим вас в ваш день 🎂</div><div className="flex gap-2"><Input type="date" max={new Date().toISOString().slice(0, 10)} value={birth ?? s.birth ?? ''} onChange={e => setBirth(e.target.value)} />
+        <Btn disabled={birth === null || birth === (s.birth ?? '')} onClick={() => api.setBirth(birth).then(() => { toast('Сохранено'); setBirth(null); load() }).catch(e => toast(e.message, false))}>Сохранить</Btn></div></div></Card><Btn className="w-full" onClick={copy}>Скопировать код для друга</Btn></div>}
   </Shell>
 }

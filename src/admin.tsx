@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Coffee, UserCog, Download, LayoutDashboard, Package, Percent, Plus, ScrollText, Search, Share2, Users, Zap, ChevronRight } from 'lucide-react'
+import { Coffee, LifeBuoy, UserCog, Download, LayoutDashboard, Package, Percent, Plus, ScrollText, Search, Share2, Users, Zap, ChevronRight } from 'lucide-react'
 import { api, Cat, fmt, guessPlan, Plan, Promo, Reward } from './api'
 import { BarBoard, PaySettings, Staff } from './bar'
+import { SupportAdmin } from './support'
 import { kzt, N } from './lib'
 import { act, Confirm, Badge, Btn, Card, cx, csv, Empty, Field, Input, Modal, num, PageHead, Select, Shell, Table, Tabs, useAsync } from './ui'
 
@@ -105,15 +106,16 @@ function Plans() {
 }
 const PK: Record<string, string> = { bonus: 'Bonus', discount: 'Скидка', info: 'Информация' }
 function Promos() {
-  const [l, load] = useAsync(api.allPromos), [del, setDel] = useState<Promo | null>(null), [ed, setEd] = useState<Partial<Promo> | null>(null), [f, setF] = useState<any>({})
+  const [l, load] = useAsync(api.allPromos), [del, setDel] = useState<Promo | null>(null), [ed, setEd] = useState<Partial<Promo> | null>(null), [f, setF] = useState<any>({}), [notify, setNotify] = useState(true)
   const open = (x: Partial<Promo> | null) => { setEd(x ?? {}); setF({ title: x?.title ?? '', body: x?.body ?? '', kind: x?.kind ?? 'info', value: x?.value ?? '', ends_on: x?.ends_on ?? '' }) }
-  const save = () => act(async () => { const v = { ...f, ends_on: f.ends_on || null }; if (ed?.id) await api.updatePromo(ed.id, v); else await api.addPromo(v); return 'Сохранено' }, () => { setEd(null); load() })
+  const save = () => act(async () => { const v = { ...f, ends_on: f.ends_on || null }; if (ed?.id) { await api.updatePromo(ed.id, v); return 'Сохранено' } const { id } = await api.addPromo(v); if (!notify) return 'Акция опубликована'; const n = await api.notifyPromo(id); return `Акция опубликована, уведомлено клиентов: ${n}` }, () => { setEd(null); setNotify(true); load() })
   return <div><PageHead title="Акции"><Btn onClick={() => open(null)}><Plus size={14} />Добавить акцию</Btn></PageHead>
     <Card pad={false}><Table rows={l ?? []} empty="Акций пока нет" cols={[{ h: 'Название', r: x => <b className="font-medium">{x.title}</b> }, { h: 'Тип', r: x => PK[x.kind ?? 'info'] }, { h: 'Размер', r: x => x.value || '—' }, { h: 'До', r: x => x.ends_on ? fmt(x.ends_on) : 'Бессрочно' }, { h: 'Статус', r: x => x.active ? <Badge t="green">Активна</Badge> : <Badge>Скрыта</Badge> },
-      { h: '', cls: 'text-right', r: x => <span className="inline-flex gap-1"><Btn v="secondary" onClick={() => open(x)}>Изменить</Btn><Btn v="ghost" onClick={() => act(async () => { await api.updatePromo(x.id, { active: !x.active }); return 'Готово' }, load)}>{x.active ? 'Скрыть' : 'Показать'}</Btn><Btn v="danger" onClick={() => setDel(x)}>Удалить</Btn></span> }]} /></Card>
+      { h: '', cls: 'text-right', r: x => <span className="inline-flex gap-1"><Btn v="secondary" onClick={() => open(x)}>Изменить</Btn><Btn v="ghost" onClick={() => act(async () => { await api.updatePromo(x.id, { active: !x.active }); return 'Готово' }, load)}>{x.active ? 'Скрыть' : 'Показать'}</Btn>{x.active && <Btn v="ghost" onClick={() => act(async () => `Уведомлено клиентов: ${await api.notifyPromo(x.id)}`)}>Уведомить</Btn>}<Btn v="danger" onClick={() => setDel(x)}>Удалить</Btn></span> }]} /></Card>
     {del && <Confirm title="Удалить акцию?" text={`Акция «${del.title}» будет удалена навсегда. Если нужно просто убрать её у клиентов, используйте «Скрыть».`} onClose={() => setDel(null)} onYes={() => act(async () => { await api.deletePromo(del.id); return 'Акция удалена' }, load)} />}
     {ed && <Modal title={ed.id ? 'Изменить акцию' : 'Новая акция'} onClose={() => setEd(null)}><Field l="Название"><Input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} /></Field><Field l="Описание"><Input value={f.body} onChange={e => setF({ ...f, body: e.target.value })} /></Field>
-      <div className="grid grid-cols-3 gap-3"><Field l="Тип"><Select className="w-full" value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })}>{Object.entries(PK).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Field><Field l="Размер"><Input value={f.value} onChange={e => setF({ ...f, value: e.target.value })} placeholder="−15% / +500" /></Field><Field l="До"><Input type="date" value={f.ends_on} onChange={e => setF({ ...f, ends_on: e.target.value })} /></Field></div><Btn disabled={!f.title} onClick={save}>Сохранить</Btn></Modal>}</div>
+      <div className="grid grid-cols-3 gap-3"><Field l="Тип"><Select className="w-full" value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })}>{Object.entries(PK).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Field><Field l="Размер"><Input value={f.value} onChange={e => setF({ ...f, value: e.target.value })} placeholder="−15% / +500" /></Field><Field l="До"><Input type="date" value={f.ends_on} onChange={e => setF({ ...f, ends_on: e.target.value })} /></Field></div>{!ed.id && <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={notify} onChange={e => setNotify(e.target.checked)} />Отправить клиентам уведомление «🔥 Новая акция Formula»</label>}
+      <Btn disabled={!f.title} onClick={save}>Сохранить</Btn></Modal>}</div>
 }
 function Refs() {
   const [l] = useAsync(api.referrals), r = l ?? [], ok = r.filter(x => x.status === 'confirmed')
@@ -127,8 +129,8 @@ function Ops() {
     <div className="flex flex-wrap gap-2 mb-3"><Select value={k} onChange={e => setK(e.target.value)}><option value="all">Все типы</option>{Object.entries(KIND).map(([a, b]) => <option key={a} value={a}>{b}</option>)}</Select><Input className="w-44" placeholder="Клиент" value={q} onChange={e => setQ(e.target.value)} /><Input className="w-32" placeholder="Сумма от" value={a} onChange={e => setA(num(e.target.value))} /><Input type="date" className="w-40" value={from} onChange={e => setFrom(e.target.value)} /><Input type="date" className="w-40" value={to} onChange={e => setTo(e.target.value)} /></div>
     <Card pad={false}><Table size={15} rows={rows} cols={[{ h: 'Дата', r: x => fmt(x.created_at) }, { h: 'Клиент', r: x => x.profiles?.full_name }, { h: 'Тип', r: x => <Badge t={kindTone(x.kind)}>{KIND[x.kind]}</Badge> }, { h: 'Описание', r: x => x.note ?? '—', cls: 'hidden md:table-cell' }, { h: 'Bonus', r: x => <Amt v={x.amount} />, cls: 'text-right' }]} /></Card></div>
 }
-export default function Admin({ who }: { who: string }) {
-  const items: [string, string, any][] = [['overview', 'Обзор', LayoutDashboard], ['redeem', 'Списание', Zap], ['clients', 'Клиенты', Users], ['store', 'Магазин', Package], ['promos', 'Акции', Percent], ['orders', 'Заказы бара', Coffee], ['refs', 'Рефералы', Share2], ['ops', 'Операции', ScrollText], ['staff', 'Сотрудники', UserCog]]
+export default function Admin({ who, role }: { who: string; role: string }) {
+  const items: [string, string, any][] = [['overview', 'Обзор', LayoutDashboard], ['redeem', 'Списание', Zap], ['clients', 'Клиенты', Users], ['store', 'Магазин', Package], ['promos', 'Акции', Percent], ['orders', 'Заказы бара', Coffee], ['refs', 'Рефералы', Share2], ['ops', 'Операции', ScrollText], ['support', 'Поддержка', LifeBuoy], ['staff', 'Сотрудники', UserCog]]
   const [k, setK] = useState('overview')
-  return <Shell items={items} cur={k} set={setK} who={who}>{k === 'overview' ? <Overview go={setK} /> : k === 'redeem' ? <Redeem /> : k === 'clients' ? <Clients /> : k === 'store' ? <Store /> : k === 'promos' ? <Promos /> : k === 'refs' ? <Refs /> : k === 'orders' ? <BarBoard /> : k === 'staff' ? <Staff /> : <Ops />}</Shell>
+  return <Shell items={items} cur={k} set={setK} who={who}>{k === 'overview' ? <Overview go={setK} /> : k === 'redeem' ? <Redeem /> : k === 'clients' ? <Clients /> : k === 'store' ? <Store /> : k === 'promos' ? <Promos /> : k === 'refs' ? <Refs /> : k === 'orders' ? <BarBoard /> : k === 'staff' ? <Staff role={role} /> : k === 'support' ? <SupportAdmin role={role} /> : <Ops />}</Shell>
 }
