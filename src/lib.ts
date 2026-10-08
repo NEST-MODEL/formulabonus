@@ -18,4 +18,38 @@ export const maskPhone = (p?: string | null) => { const d = (p ?? '').replace(/\
 const HAD = 'fb-had-session'
 export const markSession = () => { try { localStorage.setItem(HAD, '1') } catch { /* ignore */ } }
 export const lostSession = () => { try { return localStorage.getItem(HAD) === '1' } catch { return false } }
-export const logout = () => { try { localStorage.removeItem(HAD) } catch { /* ignore */ } return supabase?.auth.signOut() }
+export const logout = async () => {
+  try { localStorage.removeItem(HAD) } catch { /* ignore */ }
+  // на общем телефоне следующий пользователь не должен получать чужие push
+  try { const reg = await navigator.serviceWorker?.getRegistration(import.meta.env.BASE_URL), sub = await reg?.pushManager?.getSubscription(); if (sub) { await supabase?.rpc('delete_push_subscription', { p_endpoint: sub.endpoint }); await sub.unsubscribe() } } catch { /* ignore */ }
+  return supabase?.auth.signOut()
+}
+
+// ---- Push-уведомления в шторку ----
+const VAPID = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) || ''
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+const standalone = () => matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true
+export type PushState = 'on' | 'off' | 'denied' | 'install' | 'unsupported'
+export const pushState = async (): Promise<PushState> => {
+  if (!VAPID) return 'unsupported'
+  if (isIOS() && !standalone()) return 'install'
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return 'unsupported'
+  if (Notification.permission === 'denied') return 'denied'
+  if (Notification.permission !== 'granted') return 'off'
+  const reg = await navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL)
+  return (await reg?.pushManager.getSubscription()) ? 'on' : 'off'
+}
+const key = (b64: string) => { const p = '='.repeat((4 - b64.length % 4) % 4), raw = atob((b64 + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, c => c.charCodeAt(0)) }
+// ask=true — по нажатию кнопки (запрос разрешения); ask=false — тихо обновить подписку при открытии, если разрешение уже есть
+export const enablePush = async (ask = true) => {
+  const st = await pushState()
+  if (st === 'install') throw new Error('На iPhone сначала установите приложение на экран «Домой» (Поделиться → На экран «Домой»), затем включите уведомления оттуда')
+  if (st === 'unsupported') throw new Error('Этот браузер не поддерживает уведомления')
+  if (st === 'denied') throw new Error('Уведомления запрещены. Разрешите их для этого сайта в настройках телефона/браузера')
+  if (!ask && Notification.permission !== 'granted') return
+  if (Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') throw new Error('Вы не разрешили уведомления')
+  const reg = await navigator.serviceWorker.ready
+  const sub = (await reg.pushManager.getSubscription()) ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key(VAPID) })
+  const j = sub.toJSON(), { error } = await supabase!.rpc('save_push_subscription', { p_endpoint: sub.endpoint, p_p256dh: j.keys?.p256dh, p_auth: j.keys?.auth })
+  if (error) throw new Error('Не удалось включить уведомления. Попробуйте ещё раз.')
+}

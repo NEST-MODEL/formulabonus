@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Bell, MessageCircle } from 'lucide-react'
 import { api, Msg, Notif, Ticket } from './api'
-import { maskPhone } from './lib'
+import { enablePush, maskPhone, pushState, PushState } from './lib'
 import { act, Badge, Btn, Card, cx, Empty, Field, Input, Modal, PageHead, Table, Tabs, toast, useAsync } from './ui'
 
 // Тема обращения → получатель определяется в базе (create_ticket): «Приложение» → DEV, остальное → ADMIN
@@ -87,6 +87,19 @@ function WhatsAppSetting() {
     <Btn onClick={() => act(async () => { await api.saveSetting('whatsapp_phone', (v ?? c?.whatsapp_phone ?? '').trim()); return 'Сохранено' }, load)}>Сохранить</Btn></div></Card></div>
 }
 
+/* Включение push-уведомлений в шторку телефона */
+export function PushCard({ compact }: { compact?: boolean }) {
+  const [st, setSt] = useState<PushState | null>(null), [busy, setBusy] = useState(false)
+  useEffect(() => { pushState().then(setSt).catch(() => setSt('unsupported')) }, [])
+  if (!st || st === 'unsupported' || (compact && st === 'on')) return null
+  const on = () => { setBusy(true); enablePush().then(() => { toast('Уведомления включены'); setSt('on') }).catch(e => toast(e.message, false)).finally(() => setBusy(false)) }
+  return <div className="rounded-xl border border-line bg-surface p-4 space-y-2"><div className="font-medium">🔔 Уведомления на телефоне</div>
+    {st === 'on' ? <div className="text-[13px] text-emerald-400">Включены — уведомления приходят в шторку телефона</div>
+      : st === 'install' ? <div className="text-[13px] text-mute">На iPhone уведомления работают, когда приложение установлено: Поделиться → На экран «Домой» → откройте Formula Bonus с экрана «Домой» и включите здесь.</div>
+      : st === 'denied' ? <div className="text-[13px] text-mute">Уведомления запрещены. Разрешите их для этого сайта в настройках телефона или браузера.</div>
+      : <><div className="text-[13px] text-mute">Ответы поддержки, окончание абонемента, акции и бонусы — прямо в шторку, даже когда приложение закрыто.</div><Btn className="w-full" disabled={busy} onClick={on}>Включить уведомления</Btn></>}</div>
+}
+
 /* ---------------- Клиент: центр уведомлений ---------------- */
 const day = (t: string) => { const d = new Date(t), n = new Date(); return d.toDateString() === n.toDateString() ? 'Сегодня' : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) }
 export function Bell2({ count, reload, go }: { count: number; reload: () => void; go: (tab: string) => void }) {
@@ -95,6 +108,7 @@ export function Bell2({ count, reload, go }: { count: number; reload: () => void
   const click = (x: Notif) => { if (!x.is_read) api.markRead([x.id]).then(reload); const to = x.type === 'subscription_expiring' ? 'renew' : x.type === 'new_promotion' ? 'home' : x.type === 'referral_bonus' ? 'history' : x.type.startsWith('support') ? 'support' : ''; if (to) { setOpen(false); go(to) } else setL(ls => ls?.map(y => y.id === x.id ? { ...y, is_read: true } : y) ?? null) }
   return <><button onClick={show} className="relative h-8 w-8 grid place-items-center rounded-lg text-mute hover:text-white hover:bg-hover" aria-label="Уведомления"><Bell size={17} />{count > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-gold text-black text-[10px] font-semibold grid place-items-center">{count > 9 ? '9+' : count}</span>}</button>
     {open && <Modal drawer title="Уведомления" onClose={() => setOpen(false)}>
+      <PushCard compact />
       {count > 0 && <Btn v="ghost" onClick={() => api.markRead().then(() => { reload(); setL(ls => ls?.map(y => ({ ...y, is_read: true })) ?? null) })}>Прочитать все</Btn>}
       {l === null ? <Empty>Загрузка…</Empty> : !l.length ? <Empty>Уведомлений пока нет</Empty> : <div className="-mx-4">{l.map((x, i) => <div key={x.id}>
         {(i === 0 || day(l[i - 1].created_at) !== day(x.created_at)) && <div className="px-4 pt-3 pb-1 text-xs text-mute">{day(x.created_at)}</div>}

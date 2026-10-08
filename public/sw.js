@@ -12,3 +12,19 @@ self.addEventListener('fetch', e => {
   if (r.url.includes('/assets/')) { e.respondWith(caches.match(r).then(m => m || fetch(r).then(x => put(r, x)))); return }
   e.respondWith(fetch(r).then(x => put(r, x)).catch(() => caches.match(r)))
 })
+
+// Push-уведомления в шторку телефона
+self.addEventListener('push', e => {
+  let d = {}; try { d = e.data ? e.data.json() : {} } catch { d = { title: 'Formula Bonus', body: e.data ? e.data.text() : '' } }
+  e.waitUntil(self.registration.showNotification(d.title || 'Formula Bonus', {
+    body: d.body || '', tag: d.tag, icon: SCOPE + 'icon-192.png', badge: SCOPE + 'icon-192.png', data: { url: SCOPE + (d.tab ? '?tab=' + d.tab : '') } }))
+})
+self.addEventListener('notificationclick', e => {
+  e.notification.close()
+  const url = (e.notification.data && e.notification.data.url) || SCOPE
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
+    const w = ws.find(x => x.url.startsWith(SCOPE))
+    if (w) { w.postMessage({ type: 'open-tab', url }); return w.focus() }
+    return self.clients.openWindow(url)
+  }))
+})

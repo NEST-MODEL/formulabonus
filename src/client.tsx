@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ClipboardList, History, Home, LifeBuoy, ShoppingBag, Sparkles, Star, User } from 'lucide-react'
-import { Bell2, Support } from './support'
+import { Bell2, PushCard, Support } from './support'
+import { enablePush } from './lib'
 import { CLIENT_UPDATE } from './whatsnew'
 import { Orders, Shop, StoreCodes } from './shop'
 import { BAR_ORDERS } from './features'
@@ -16,6 +17,11 @@ export default function Client() {
   const seen = useRef<Record<string, string>>({})
   useEffect(() => { ao?.forEach(o => { const p = seen.current[o.id]; if (p && p !== o.status) toast(`Заказ #${o.num}: ${LBL[o.status] ?? o.status}`); seen.current[o.id] = o.status }) }, [ao])
   // уведомления: генерация один раз при открытии, счётчик — при открытии и возврате в приложение (без постоянного опроса)
+  useEffect(() => {
+    const go = (u: string) => { const t = new URL(u, location.href).searchParams.get('tab'); if (t) { setTab(t); setCode(null); history.replaceState(null, '', import.meta.env.BASE_URL) } }
+    go(location.href); enablePush(false).catch(() => {})  // тихо обновляем подписку, если разрешение уже дано
+    const f = (e: MessageEvent) => { if (e.data?.type === 'open-tab') { go(e.data.url); loadUnread() } }; navigator.serviceWorker?.addEventListener('message', f); return () => navigator.serviceWorker?.removeEventListener('message', f)
+  }, []) // eslint-disable-line
   const [unread, setUnread] = useState(0), loadUnread = () => { api.unread().then(setUnread).catch(() => {}) }
   useEffect(() => { api.syncNotifications().catch(() => {}).finally(loadUnread); const f = () => { if (document.visibilityState === 'visible') loadUnread() }; document.addEventListener('visibilitychange', f); return () => document.removeEventListener('visibilitychange', f) }, []) // eslint-disable-line
   // плашка «ОБНОВЛЕНИЕ!» — один раз на каждое обновление
@@ -59,6 +65,7 @@ export default function Client() {
     {tab === 'store' && (BAR_ORDERS ? <Shop s={s} goOrders={() => setTab('orders')} /> : code ? <div className="max-w-2xl space-y-3"><h1 className="text-2xl font-semibold tracking-tight">Магазин</h1>{CodeCard}</div> : <StoreCodes s={s} onCode={c => { setCode(c); setSt({ status: 'pending', used: 0 }) }} />)}
     {BAR_ORDERS && tab === 'orders' && <Orders />}
     {tab === 'profile' && <div className="max-w-md space-y-3"><h1 className="text-2xl font-semibold tracking-tight">Профиль</h1><Card pad={false}>{[['Имя', s.name], ['Телефон', s.phone || '—'], ['Код для друзей', s.code], ['Статус', 'Клиент']].map(([a, b]) => <div key={a} className="flex justify-between px-4 py-3 border-t first:border-t-0 border-line"><span className="text-mute">{a}</span><b className="font-medium">{b}</b></div>)}</Card>
+      <PushCard />
       <Card title="Дата рождения"><div className="space-y-2"><div className="text-[13px] text-mute">Поздравим вас в ваш день 🎂</div><div className="flex gap-2"><Input type="date" max={new Date().toISOString().slice(0, 10)} value={birth ?? s.birth ?? ''} onChange={e => setBirth(e.target.value)} />
         <Btn disabled={birth === null || birth === (s.birth ?? '')} onClick={() => api.setBirth(birth).then(() => { toast('Сохранено'); setBirth(null); load() }).catch(e => toast(e.message, false))}>Сохранить</Btn></div></div></Card><Btn className="w-full" onClick={copy}>Скопировать код для друга</Btn></div>}
   </Shell>
