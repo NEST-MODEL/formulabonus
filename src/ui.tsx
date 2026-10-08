@@ -39,6 +39,10 @@ export function Modal({ title, onClose, children, drawer }: { title: string; onC
   return <div className="fixed inset-0 z-50 flex bg-black/60" onMouseDown={onClose}><div onMouseDown={e => e.stopPropagation()} className={cx('bg-surface border-line overflow-y-auto', drawer ? 'ml-auto h-full w-full max-w-lg border-l' : 'm-auto w-full max-w-md max-h-[90vh] border rounded-xl')}>
     <div className="flex items-center justify-between px-4 h-12 border-b border-line sticky top-0 bg-surface"><div className="font-medium">{title}</div><Btn v="ghost" className="!px-2" onClick={onClose}><X size={16} /></Btn></div><div className="p-4 space-y-4">{children}</div></div></div>
 }
+export function Confirm({ title, text, yes = 'Удалить', onYes, onClose }: { title: string; text: string; yes?: string; onYes: () => Promise<any>; onClose: () => void }) {
+  const [busy, setBusy] = useState(false)
+  return <Modal title={title} onClose={onClose}><div className="text-[13px] text-mute">{text}</div><div className="flex justify-end gap-2"><Btn v="secondary" onClick={onClose}>Отмена</Btn><Btn v="danger" disabled={busy} onClick={() => { setBusy(true); onYes().finally(() => { setBusy(false); onClose() }) }}>{yes}</Btn></div></Modal>
+}
 export function Tabs({ tabs, cur, set }: { tabs: [string, string][]; cur: string; set: (k: string) => void }) {
   return <div className="flex gap-1 border-b border-line">{tabs.map(([k, l]) => <button key={k} onClick={() => set(k)} className={cx('px-3 h-9 text-[13px] -mb-px border-b-2', cur === k ? 'border-gold text-white' : 'border-transparent text-mute hover:text-white')}>{l}</button>)}</div>
 }
@@ -73,6 +77,6 @@ export function Shell({ items, cur, set, who, bottom, children }: { items: [stri
     <header className={cx('flex items-center justify-between h-12 px-4 border-b border-line sticky top-0 bg-bg z-30', bottom ? 'md:hidden' : 'lg:hidden')}><Logo /><div className="flex items-center gap-1"><Install compact />{bottom ? <Btn v="ghost" className="!px-2" onClick={() => supabase!.auth.signOut()}><LogOut size={16} /></Btn> : <Btn v="ghost" className="!px-2" onClick={() => setOpen(true)}><Menu size={18} /></Btn>}</div></header>
     {open && <div className="fixed inset-0 z-50 bg-black/60" onClick={() => setOpen(false)}><aside onClick={e => e.stopPropagation()} className="w-56 h-full bg-side border-r border-line p-3 flex flex-col"><Side cb={() => setOpen(false)} /></aside></div>}
     <main className={cx('p-4 md:p-6 max-w-[1200px]', bottom ? 'md:ml-56 pb-24 md:pb-6' : 'lg:ml-56')}>{children}</main>
-    {bottom && <nav className="md:hidden fixed bottom-0 inset-x-0 bg-side border-t border-line grid grid-cols-4 pb-[env(safe-area-inset-bottom)] z-30">{items.map(([k, l, I]) => <button key={k} onClick={() => set(k)} className={cx('py-2.5 text-[11px] flex flex-col items-center gap-1', cur === k ? 'text-gold' : 'text-mute')}><I size={18} />{l}</button>)}</nav>}
+    {bottom && <nav className="md:hidden fixed bottom-0 inset-x-0 bg-side border-t border-line grid pb-[env(safe-area-inset-bottom)] z-30" style={{ gridTemplateColumns: `repeat(${items.length}, 1fr)` }}>{items.map(([k, l, I]) => <button key={k} onClick={() => set(k)} className={cx('py-2.5 text-[11px] flex flex-col items-center gap-1', cur === k ? 'text-gold' : 'text-mute')}><I size={18} />{l}</button>)}</nav>}
   </div>
 }

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, LayoutDashboard, Package, Percent, Plus, ScrollText, Search, Share2, Users, Zap, ChevronRight } from 'lucide-react'
-import { api, fmt, guessPlan, Plan, Promo, Reward } from './api'
+import { Coffee, UserCog, Download, LayoutDashboard, Package, Percent, Plus, ScrollText, Search, Share2, Users, Zap, ChevronRight } from 'lucide-react'
+import { api, Cat, fmt, guessPlan, Plan, Promo, Reward } from './api'
+import { BarBoard, PaySettings, Staff } from './bar'
 import { kzt, N } from './lib'
-import { act, Badge, Btn, Card, cx, csv, Empty, Field, Input, Modal, num, PageHead, Select, Shell, Table, Tabs, useAsync } from './ui'
+import { act, Confirm, Badge, Btn, Card, cx, csv, Empty, Field, Input, Modal, num, PageHead, Select, Shell, Table, Tabs, useAsync } from './ui'
 
 const KIND: Record<string, string> = { accrual: 'Начисление', annual: 'Годовой абонемент', referral: 'Реферал', redeem: 'Списание', expire: 'Сгорание', adjust: 'Корректировка' }
 const kindTone = (k: string) => (k === 'redeem' ? 'gold' : k === 'expire' ? 'red' : k === 'adjust' ? 'gray' : 'green') as any
@@ -71,13 +72,24 @@ function Clients() {
     {sel && <ClientDrawer c={list?.find(x => x.id === sel.id) ?? sel} onClose={() => setSel(null)} reload={load} />}</div>
 }
 function Store() {
-  const [list, load] = useAsync(api.allRewards), [ed, setEd] = useState<Partial<Reward> | null>(null), [t, setT] = useState(''), [p, setP] = useState(''), [pc, setPc] = useState('10')
-  const open = (r: Partial<Reward> | null) => { setEd(r ?? {}); setT(r?.title ?? ''); setP(String(r?.price ?? '')); setPc(String(r?.pct ?? 10)) }
-  const save = () => act(async () => { const f = { title: t, price: +p, max_bonus_pct: Math.min(+pc, 100) }; if (ed?.id) await api.updateReward(ed.id, { ...f, active: !!ed.active }); else await api.addReward(t, f.price, f.max_bonus_pct); return 'Сохранено' }, () => { setEd(null); load() })
+  const [list, load] = useAsync(api.allRewards), [cats, loadC] = useAsync(api.cats), [ed, setEd] = useState<Partial<Reward> | null>(null), [f, setF] = useState<any>({}), [del, setDel] = useState<Reward | null>(null), [delC, setDelC] = useState<Cat | null>(null), [cf, setCf] = useState('all'), [cn, setCn] = useState('')
+  const cname = (id?: string | null) => cats?.find(c => c.id === id)?.name ?? '—'
+  const open = (r: Partial<Reward> | null) => { setEd(r ?? {}); setF({ title: r?.title ?? '', price: String(r?.price ?? ''), pct: String(r?.pct ?? 10), cat: r?.cat ?? '', desc: r?.desc ?? '' }) }
+  const save = () => act(async () => { const v = { title: f.title, price: +f.price, max_bonus_pct: Math.min(+f.pct, 100), category_id: f.cat || null, description: f.desc }; if (ed?.id) await api.updateReward(ed.id, { ...v, active: !!ed.active }); else await api.addReward(v); return 'Сохранено' }, () => { setEd(null); load() })
+  const rows = (list ?? []).filter(r => cf === 'all' || (cf === 'none' ? !r.cat : r.cat === cf))
   return <div><PageHead title="Магазин"><Btn onClick={() => open(null)}><Plus size={14} />Добавить товар</Btn></PageHead>
-    <Card pad={false}><Table rows={list ?? []} cols={[{ h: 'Товар', r: r => <b className="font-medium">{r.title}</b> }, { h: 'Цена', r: r => kzt(r.price) }, { h: 'Bonus', r: r => `до ${r.pct}% · ${kzt(Math.floor(r.price * r.pct / 100))}` }, { h: 'Статус', r: r => r.active ? <Badge t="green">Активен</Badge> : <Badge>Скрыт</Badge> },
-      { h: '', cls: 'text-right', r: r => <span className="inline-flex gap-1"><Btn v="secondary" onClick={() => open(r)}>Изменить</Btn><Btn v="ghost" onClick={() => act(async () => { await api.toggleReward(r.id, !r.active); return r.active ? 'Скрыт' : 'Показан' }, load)}>{r.active ? 'Скрыть' : 'Показать'}</Btn></span> }]} /></Card>
-    <Plans />{ed && <Modal title={ed.id ? 'Изменить товар' : 'Новый товар'} onClose={() => setEd(null)}><Field l="Название"><Input value={t} onChange={e => setT(e.target.value)} /></Field><div className="grid grid-cols-2 gap-3"><Field l="Цена, ₸"><Input value={p} onChange={e => setP(num(e.target.value))} /></Field><Field l="Макс. покрытие Bonus, %"><Input value={pc} onChange={e => setPc(num(e.target.value))} /></Field></div><Btn disabled={!t || !p} onClick={save}>Сохранить</Btn></Modal>}</div>
+    <div className="flex flex-wrap gap-1.5 mb-3">{[['all', 'Все'], ...(cats ?? []).map(c => [c.id, c.name]), ['none', 'Без категории']].map(([k, l]) => <Btn key={k} v={cf === k ? 'primary' : 'secondary'} onClick={() => setCf(k)}>{l}</Btn>)}</div>
+    <Card pad={false}><Table rows={rows} empty="Товаров нет" cols={[{ h: 'Товар', r: r => <div><b className="font-medium">{r.title}</b>{r.desc && <div className="text-xs text-mute">{r.desc}</div>}</div> }, { h: 'Категория', r: r => cname(r.cat), cls: 'hidden md:table-cell' }, { h: 'Цена', r: r => kzt(r.price) }, { h: 'Bonus', r: r => `до ${r.pct}%`, cls: 'hidden md:table-cell' }, { h: 'Статус', r: r => r.active ? <Badge t="green">Активен</Badge> : <Badge>Скрыт</Badge> },
+      { h: '', cls: 'text-right', r: r => <span className="inline-flex gap-1"><Btn v="secondary" onClick={() => open(r)}>Изменить</Btn><Btn v="ghost" onClick={() => act(async () => { await api.toggleReward(r.id, !r.active); return r.active ? 'Скрыт' : 'Показан' }, load)}>{r.active ? 'Скрыть' : 'Показать'}</Btn><Btn v="danger" onClick={() => setDel(r)}>Удалить</Btn></span> }]} /></Card>
+    <div className="mt-8"><h2 className="text-lg font-semibold mb-3">Категории</h2><Card pad={false}>{(cats ?? []).map(c => <div key={c.id} className="flex items-center justify-between px-4 h-11 border-t first:border-t-0 border-line"><span className={c.active ? '' : 'text-mute line-through'}>{c.name}</span><span className="inline-flex gap-1">
+      <Btn v="ghost" onClick={() => { const n = window.prompt('Новое название', c.name); if (n && n.trim()) act(async () => { await api.updateCat(c.id, { name: n.trim() }); return 'Сохранено' }, loadC) }}>Переименовать</Btn><Btn v="ghost" onClick={() => act(async () => { await api.updateCat(c.id, { active: !c.active }); return 'Готово' }, loadC)}>{c.active ? 'Скрыть' : 'Показать'}</Btn><Btn v="danger" onClick={() => setDelC(c)}>Удалить</Btn></span></div>)}
+      <div className="flex gap-2 p-3 border-t border-line"><Input placeholder="Новая категория (кофе, напитки, спортпит…)" value={cn} onChange={e => setCn(e.target.value)} /><Btn disabled={!cn.trim()} onClick={() => act(async () => { await api.addCat(cn.trim()); return 'Категория добавлена' }, () => { setCn(''); loadC() })}>Добавить</Btn></div></Card></div>
+    <PaySettings /><Plans />
+    {del && <Confirm title="Удалить товар?" text={`«${del.title}» будет удалён навсегда. История операций и заказов сохранится. Если товар нужно просто убрать из магазина, используйте «Скрыть».`} onClose={() => setDel(null)} onYes={() => act(async () => { await api.deleteReward(del.id); return 'Товар удалён' }, load)} />}
+    {delC && <Confirm title="Удалить категорию?" text={`Категория «${delC.name}» будет удалена. Товары останутся, но попадут в «Без категории».`} onClose={() => setDelC(null)} onYes={() => act(async () => { await api.deleteCat(delC.id); return 'Категория удалена' }, () => { loadC(); load() })} />}
+    {ed && <Modal title={ed.id ? 'Изменить товар' : 'Новый товар'} onClose={() => setEd(null)}><Field l="Название"><Input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} /></Field><Field l="Описание (необязательно)"><Input value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })} /></Field>
+      <div className="grid grid-cols-2 gap-3"><Field l="Категория"><Select className="w-full" value={f.cat} onChange={e => setF({ ...f, cat: e.target.value })}><option value="">Без категории</option>{(cats ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field><Field l="Цена, ₸"><Input value={f.price} onChange={e => setF({ ...f, price: num(e.target.value) })} /></Field></div>
+      <Field l="Макс. покрытие Bonus, %"><Input value={f.pct} onChange={e => setF({ ...f, pct: num(e.target.value) })} /></Field><Btn disabled={!f.title || !f.price} onClick={save}>Сохранить</Btn></Modal>}</div>
 }
 function Plans() {
   const [l, load] = useAsync(api.plans), [ed, setEd] = useState<Partial<Plan> | null>(null), [f, setF] = useState<any>({})
@@ -93,12 +105,13 @@ function Plans() {
 }
 const PK: Record<string, string> = { bonus: 'Bonus', discount: 'Скидка', info: 'Информация' }
 function Promos() {
-  const [l, load] = useAsync(api.allPromos), [ed, setEd] = useState<Partial<Promo> | null>(null), [f, setF] = useState<any>({})
+  const [l, load] = useAsync(api.allPromos), [del, setDel] = useState<Promo | null>(null), [ed, setEd] = useState<Partial<Promo> | null>(null), [f, setF] = useState<any>({})
   const open = (x: Partial<Promo> | null) => { setEd(x ?? {}); setF({ title: x?.title ?? '', body: x?.body ?? '', kind: x?.kind ?? 'info', value: x?.value ?? '', ends_on: x?.ends_on ?? '' }) }
   const save = () => act(async () => { const v = { ...f, ends_on: f.ends_on || null }; if (ed?.id) await api.updatePromo(ed.id, v); else await api.addPromo(v); return 'Сохранено' }, () => { setEd(null); load() })
   return <div><PageHead title="Акции"><Btn onClick={() => open(null)}><Plus size={14} />Добавить акцию</Btn></PageHead>
     <Card pad={false}><Table rows={l ?? []} empty="Акций пока нет" cols={[{ h: 'Название', r: x => <b className="font-medium">{x.title}</b> }, { h: 'Тип', r: x => PK[x.kind ?? 'info'] }, { h: 'Размер', r: x => x.value || '—' }, { h: 'До', r: x => x.ends_on ? fmt(x.ends_on) : 'Бессрочно' }, { h: 'Статус', r: x => x.active ? <Badge t="green">Активна</Badge> : <Badge>Скрыта</Badge> },
-      { h: '', cls: 'text-right', r: x => <span className="inline-flex gap-1"><Btn v="secondary" onClick={() => open(x)}>Изменить</Btn><Btn v="ghost" onClick={() => act(async () => { await api.updatePromo(x.id, { active: !x.active }); return 'Готово' }, load)}>{x.active ? 'Скрыть' : 'Показать'}</Btn></span> }]} /></Card>
+      { h: '', cls: 'text-right', r: x => <span className="inline-flex gap-1"><Btn v="secondary" onClick={() => open(x)}>Изменить</Btn><Btn v="ghost" onClick={() => act(async () => { await api.updatePromo(x.id, { active: !x.active }); return 'Готово' }, load)}>{x.active ? 'Скрыть' : 'Показать'}</Btn><Btn v="danger" onClick={() => setDel(x)}>Удалить</Btn></span> }]} /></Card>
+    {del && <Confirm title="Удалить акцию?" text={`Акция «${del.title}» будет удалена навсегда. Если нужно просто убрать её у клиентов, используйте «Скрыть».`} onClose={() => setDel(null)} onYes={() => act(async () => { await api.deletePromo(del.id); return 'Акция удалена' }, load)} />}
     {ed && <Modal title={ed.id ? 'Изменить акцию' : 'Новая акция'} onClose={() => setEd(null)}><Field l="Название"><Input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} /></Field><Field l="Описание"><Input value={f.body} onChange={e => setF({ ...f, body: e.target.value })} /></Field>
       <div className="grid grid-cols-3 gap-3"><Field l="Тип"><Select className="w-full" value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })}>{Object.entries(PK).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Field><Field l="Размер"><Input value={f.value} onChange={e => setF({ ...f, value: e.target.value })} placeholder="−15% / +500" /></Field><Field l="До"><Input type="date" value={f.ends_on} onChange={e => setF({ ...f, ends_on: e.target.value })} /></Field></div><Btn disabled={!f.title} onClick={save}>Сохранить</Btn></Modal>}</div>
 }
@@ -115,7 +128,7 @@ function Ops() {
     <Card pad={false}><Table size={15} rows={rows} cols={[{ h: 'Дата', r: x => fmt(x.created_at) }, { h: 'Клиент', r: x => x.profiles?.full_name }, { h: 'Тип', r: x => <Badge t={kindTone(x.kind)}>{KIND[x.kind]}</Badge> }, { h: 'Описание', r: x => x.note ?? '—', cls: 'hidden md:table-cell' }, { h: 'Bonus', r: x => <Amt v={x.amount} />, cls: 'text-right' }]} /></Card></div>
 }
 export default function Admin({ who }: { who: string }) {
-  const items: [string, string, any][] = [['overview', 'Обзор', LayoutDashboard], ['redeem', 'Списание', Zap], ['clients', 'Клиенты', Users], ['store', 'Магазин', Package], ['promos', 'Акции', Percent], ['refs', 'Рефералы', Share2], ['ops', 'Операции', ScrollText]]
+  const items: [string, string, any][] = [['overview', 'Обзор', LayoutDashboard], ['redeem', 'Списание', Zap], ['clients', 'Клиенты', Users], ['store', 'Магазин', Package], ['promos', 'Акции', Percent], ['orders', 'Заказы бара', Coffee], ['refs', 'Рефералы', Share2], ['ops', 'Операции', ScrollText], ['staff', 'Сотрудники', UserCog]]
   const [k, setK] = useState('overview')
-  return <Shell items={items} cur={k} set={setK} who={who}>{k === 'overview' ? <Overview go={setK} /> : k === 'redeem' ? <Redeem /> : k === 'clients' ? <Clients /> : k === 'store' ? <Store /> : k === 'promos' ? <Promos /> : k === 'refs' ? <Refs /> : <Ops />}</Shell>
+  return <Shell items={items} cur={k} set={setK} who={who}>{k === 'overview' ? <Overview go={setK} /> : k === 'redeem' ? <Redeem /> : k === 'clients' ? <Clients /> : k === 'store' ? <Store /> : k === 'promos' ? <Promos /> : k === 'refs' ? <Refs /> : k === 'orders' ? <BarBoard /> : k === 'staff' ? <Staff /> : <Ops />}</Shell>
 }

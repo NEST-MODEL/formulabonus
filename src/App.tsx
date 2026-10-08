@@ -3,6 +3,7 @@ import { api } from './api'
 import { supabase } from './lib'
 import Admin from './admin'
 import Client from './client'
+import { BarApp } from './bar'
 import { Btn, Input, Logo, Toasts } from './ui'
 
 function Auth() {
@@ -25,6 +26,6 @@ export default function App() {
   const [role, setRole] = useState<string | null | undefined>(undefined)
   useEffect(() => { if (!supabase) return; const f = () => { api.role().then(setRole) }; f(); const { data } = supabase.auth.onAuthStateChange(f); return () => data.subscription.unsubscribe() }, [])
   const body = !supabase ? <div className="max-w-md mx-auto mt-20 p-6 border border-line rounded-xl">Не заданы VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY.</div>
-    : role === undefined ? <div className="p-8 text-center text-mute">Загрузка…</div> : role === null ? <Auth /> : role === 'client' ? <Client /> : <Admin who="Админ" />
+    : role === undefined ? <div className="p-8 text-center text-mute">Загрузка…</div> : role === null ? <Auth /> : role === 'client' ? <Client /> : role === 'bartender' ? <BarApp /> : <Admin who="Админ" />
   return <>{body}<Toasts /></>
 }
