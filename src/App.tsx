@@ -10,8 +10,11 @@ const PhoneInput = ({ value, set }: { value: string; set: (v: string) => void })
   <Input type="tel" inputMode="tel" autoComplete="tel" placeholder="+7 (___) ___-__-__" value={value} onFocus={() => { if (!value) set('+7') }} onChange={e => set(fmtPhone(e.target.value))} />
 const Label = ({ t }: { t: string }) => <div className="text-xs text-mute -mb-1.5">{t}</div>
 
+// Ссылка-приглашение вида …/formulabonus/?ref=КОД: открывает регистрацию с подставленным кодом друга
+const readRef = () => { try { const q = new URLSearchParams(location.search).get('ref'); if (q) { sessionStorage.setItem('fb-ref', q.toUpperCase().slice(0, 16)); history.replaceState(null, '', import.meta.env.BASE_URL) } return sessionStorage.getItem('fb-ref') ?? '' } catch { return '' } }
 function Auth() {
-  const [mode, setMode] = useState<'login' | 'reg' | 'forgot' | 'sent' | 'email'>('login'), [f, setF] = useState({ name: '', phone: '', email: '', pass: '', ref: '' })
+  const invited = useState(readRef)[0]
+  const [mode, setMode] = useState<'login' | 'reg' | 'forgot' | 'sent' | 'email'>(invited ? 'reg' : 'login'), [f, setF] = useState({ name: '', phone: '', email: '', pass: '', ref: invited })
   const [err, setErr] = useState(''), [busy, setBusy] = useState(false), lost = lostSession()
   const u = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value }), go = (m: typeof mode) => { setMode(m); setErr('') }
   const run = (p: Promise<any>, next?: typeof mode) => { setBusy(true); setErr(''); p.then(() => next && setMode(next)).catch(e => setErr(e.message)).finally(() => setBusy(false)) }
@@ -26,6 +29,7 @@ function Auth() {
     <div className="p-6 lg:p-16 flex items-center"><form onSubmit={submit} className="w-full max-w-sm mx-auto space-y-3">
       {lost && (mode === 'login' || mode === 'email') && <div className="rounded-lg border border-gold/40 bg-gold/5 px-3 py-2.5 text-[13px]"><b className="text-gold">НЕ БЕСПОКОЙТЕСЬ!</b> Наше приложение было обновлено, ваша сессия была завершена для безопасности ваших данных, пожалуйста войдите повторно ❤️</div>}
       <div className="text-lg font-semibold">{title}</div>
+      {mode === 'reg' && invited && <div className="rounded-lg border border-gold/40 bg-gold/5 px-3 py-2 text-[13px]">🎁 Вас пригласил друг — код <b className="text-gold">{invited}</b> уже подставлен</div>}
       {mode === 'sent' ? <><div className="text-[13px] text-mute">Мы передали запрос на восстановление доступа ответственному сотруднику. Ожидайте связи.</div><Btn type="button" className="w-full !h-10" onClick={() => go('login')}>Вернуться ко входу</Btn></> : <>
         {mode === 'reg' && <><Label t="Имя" /><Input autoComplete="given-name" placeholder="Алексей" value={f.name} onChange={u('name')} /></>}
         {mode === 'email' ? <><Label t="Почта" /><Input type="email" autoComplete="email" value={f.email} onChange={u('email')} /></> : <><Label t={mode === 'forgot' ? 'Введите номер телефона' : 'Номер телефона'} /><PhoneInput value={f.phone} set={v => setF({ ...f, phone: v })} /></>}

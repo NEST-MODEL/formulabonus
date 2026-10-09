@@ -8,7 +8,7 @@ export type Cat = { id: string; name: string; sort: number; active: boolean }
 export type Order = { payment_status: string; cash_amount: number; kaspi_payment_url: string | null; id: string; num: number; client_name: string; status: string; pay_method: string; paid: boolean; kaspi_claimed: boolean; total: number; bonus_planned: number; bonus_used: number; comment: string | null; created_at: string; order_items: { title: string; price: number; qty: number }[] }
 const ORD = 'payment_status,cash_amount,kaspi_payment_url,id,num,client_name,status,pay_method,paid,kaspi_claimed,total,bonus_planned,bonus_used,comment,created_at,order_items(title,price,qty)'
 export type Promo = { id: string; title: string; body: string; active: boolean; kind?: string; value?: string; ends_on?: string | null }
-export type Snap = { birth: string | null; reserved: number; batches: Batch[]; phone: string; promos: Promo[]; name: string; code: string; balance: number; expiring: { amount: number; days: number } | null; daysLeft: number | null; tx: Tx[]; rewards: Reward[] }
+export type Snap = { plan: string | null; endsOn: string | null; birth: string | null; reserved: number; batches: Batch[]; phone: string; promos: Promo[]; name: string; code: string; balance: number; expiring: { amount: number; days: number } | null; daysLeft: number | null; tx: Tx[]; rewards: Reward[] }
 export type Plan = { id: string; name: string; days: number; price: number; annual: boolean; max_bonus_pct: number; active: boolean }
 export const guessPlan = (plans: Plan[], m?: { plan_id?: string | null; annual?: boolean }) => (m && (plans.find(p => p.id === m.plan_id) ?? plans.find(p => p.annual === !!m.annual))) || plans[0]
 export type Preview = { plan?: boolean; code: string; client: string; balance: number; reward: string; price: number; bonus: number }
@@ -43,13 +43,13 @@ export const api = {
       S.from('profiles').select('full_name,phone,referral_code,birth_date').eq('id', id).single(),
       S.from('bonus_wallets').select('balance').eq('client_id', id).maybeSingle(),
       S.from('bonus_transactions').select('id,kind,amount,note,created_at,expires_at,activation_pending').eq('client_id', id).order('created_at', { ascending: false }).limit(30),
-      S.from('memberships').select('ends_on').eq('client_id', id).eq('status', 'active').order('ends_on', { ascending: false }).limit(1),
+      S.from('memberships').select('ends_on,plan').eq('client_id', id).eq('status', 'active').order('ends_on', { ascending: false }).limit(1),
       S.from('rewards').select('id,title,price,max_bonus_pct,active,category_id,description').eq('active', true),
       S.from('promos').select('id,title,body,active,kind,value,ends_on').eq('active', true).order('created_at', { ascending: false }),
       S.from('bonus_transactions').select('id,note,remaining,expires_at,activation_pending').eq('client_id', id).gt('remaining', 0).or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).order('created_at')])
     const reserved = (ok(await S.from('orders').select('bonus_planned').eq('client_id', id).eq('paid', false).neq('status', 'cancelled')) as any[]).reduce((s, x) => s + x.bonus_planned, 0)
-    const end = m.data?.[0]?.ends_on
-    return { birth: p.data?.birth_date ?? null, phone: p.data?.phone ?? '', promos: (pr.data ?? []) as Promo[], name: p.data?.full_name ?? '', code: p.data?.referral_code ?? '', reserved, balance: Math.max((b.data ?? []).reduce((s: number, x: any) => s + x.remaining, 0) - reserved, 0),
+    const end = m.data?.[0]?.ends_on, plan = (m.data?.[0] as any)?.plan ?? null
+    return { plan, endsOn: end ?? null, birth: p.data?.birth_date ?? null, phone: p.data?.phone ?? '', promos: (pr.data ?? []) as Promo[], name: p.data?.full_name ?? '', code: p.data?.referral_code ?? '', reserved, balance: Math.max((b.data ?? []).reduce((s: number, x: any) => s + x.remaining, 0) - reserved, 0),
       batches: (b.data ?? []).map((x: any) => ({ id: x.id, label: x.note ?? '', amount: x.remaining, pending: !!x.activation_pending, expires: x.expires_at ?? null, days: x.expires_at ? Math.max(0, Math.ceil((+new Date(x.expires_at) - Date.now()) / DAY)) : null })),
       expiring: exp14((b.data ?? []).filter((x: any) => x.expires_at).map((x: any) => ({ r: x.remaining, exp: +new Date(x.expires_at) }))),
       daysLeft: end ? Math.ceil((+new Date(end) - Date.now()) / DAY) : null,
@@ -80,6 +80,7 @@ export const api = {
     for (let i = days - 1; i >= 0; i--) { const k = new Date(Date.now() - i * DAY).toISOString().slice(0, 10); o[k] = { d: k, inn: 0, out: 0, n: 0 } }
     d.forEach(x => { const e = o[x.created_at.slice(0, 10)]; if (!e) return; e.n++; if (x.amount > 0) e.inn += x.amount; else e.out -= x.amount }); return Object.values(o) as { d: string; inn: number; out: number; n: number }[] },
   expiredCount: async () => { const { count } = await S.from('bonus_transactions').select('id', { count: 'exact', head: true }).gt('remaining', 0).lte('expires_at', new Date().toISOString()); return count ?? 0 },
+  myReferrals: async () => ok(await S.rpc('my_referrals')) as { earned: number; friends: { name: string; status: string; created_at: string; confirmed_at: string | null }[] },
   myRefs: async () => { const { data: { user } } = await S.auth.getUser(), id = user!.id; const [a, b] = await Promise.all([S.from('referrals').select('status').eq('referrer_id', id), S.from('referrals').select('status').eq('referred_id', id).maybeSingle()]); return { invited: (a.data ?? []) as { status: string }[], asFriend: b.data?.status as string | undefined } },
   sell: async (client: string, plan: string, price: number, days: number, annual = false) => ok(await S.rpc('sell_membership', { p_client: client, p_plan: plan, p_price: price, p_days: days, p_annual: annual })) as number,
   plans: async () => ok(await S.from('plans').select('id,name,days,price,annual,max_bonus_pct,active').order('sort').order('days')) as Plan[],

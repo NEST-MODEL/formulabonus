@@ -2,3 +2,11 @@
 body{@apply bg-bg text-[#F5F5F5] font-body text-sm antialiased tabular-nums}
 input,select{color-scheme:dark}
 button,a,tr{transition:background-color .15s,color .15s,border-color .15s}
+
+/* ---- клиентский интерфейс: премиальные жёлтые карточки ---- */
+.card-gold{background:radial-gradient(130% 150% at 100% 0%,#FFE36B 0%,#FFC81F 42%,#F3A900 100%);color:#0A0A0A}
+.card-dark{background:linear-gradient(180deg,#171717 0%,#111111 100%);border:1px solid #242424}
+.rise{animation:fb-rise .5s cubic-bezier(.2,.7,.2,1) both}
+@keyframes fb-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.press{transition:transform .15s ease,background-color .15s,border-color .15s}.press:active{transform:scale(.97)}
+@media (prefers-reduced-motion:reduce){.rise{animation:none}.press:active{transform:none}}
