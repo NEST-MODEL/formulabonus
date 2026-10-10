@@ -39,7 +39,7 @@ export function Support() {
   const wa = waLink(cfg?.whatsapp_phone ?? ''), [mine, loadMine] = useAsync(api.myTickets), [open, setOpen] = useState<Ticket | null>(null)
   const send = () => { setBusy(true); setErr(''); api.createTicket(cat, text).then(() => { setSent(true); setText(''); setCat(''); loadMine() }).catch(e => setErr(e.message)).finally(() => setBusy(false)) }
   const CST: Record<string, [string, any]> = { open: ['Ожидает ответа', 'gray'], in_progress: ['Есть ответ', 'gold'], resolved: ['Решено', 'green'], closed: ['Закрыто', 'gray'] }
-  return <div className="max-w-xl space-y-3"><h1 className="text-2xl font-semibold tracking-tight">Поддержка</h1>
+  return <div className="max-w-xl space-y-3 rise-kids"><h1 className="text-[26px] font-bold tracking-tight">Поддержка</h1>
     {!!mine?.length && <Card title="Мои обращения" pad={false}>{mine.map(t => <button key={t.id} onClick={() => setOpen(t)} className="w-full text-left px-4 py-3 border-t first:border-t-0 border-line hover:bg-hover flex items-center justify-between gap-3">
       <span className="min-w-0"><div className="font-medium">{CAT[t.category] ?? t.category}</div><div className="text-xs text-mute truncate">{t.description}</div></span><Badge t={CST[t.status][1]}>{CST[t.status][0]}</Badge></button>)}</Card>}
     {open && <Modal drawer title={CAT[open.category] ?? 'Обращение'} onClose={() => { setOpen(null); loadMine() }}>

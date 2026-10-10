@@ -1,4 +1,5 @@
-import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, LogOut, Menu, X, type LucideIcon } from 'lucide-react'
 import { logout } from './lib'
 export const cx = (...a: (string | false | undefined | null)[]) => a.filter(Boolean).join(' ')
@@ -34,10 +35,35 @@ export const Card = ({ title, action, children, pad = true }: { title?: string; 
   <section className="bg-surface border border-line rounded-xl">{title && <div className="flex items-center justify-between px-4 h-11 border-b border-line"><h2 className="font-medium text-[15px]">{title}</h2>{action}</div>}<div className={pad ? 'p-4' : ''}>{children}</div></section>
 export const Empty = ({ children }: { children: ReactNode }) => <div className="py-10 text-center text-mute text-[13px]">{children}</div>
 export const PageHead = ({ title, children }: { title: string; children?: ReactNode }) => <div className="flex flex-wrap items-center justify-between gap-3 mb-5"><h1 className="text-2xl font-semibold tracking-tight">{title}</h1><div className="flex flex-wrap gap-2 items-center">{children}</div></div>
+/* Окна и «назад»: каждое открытое окно — отдельная запись в истории, поэтому свайп от края / кнопка «Назад»
+   закрывают окно, а не приложение. Окна рисуются в document.body (portal) — так их не прячут анимированные блоки. */
+type Entry = { id: string; close: () => void; popped: boolean }
+const modalStack: Entry[] = []
+let navListener = false
+const installNav = () => {
+  if (navListener || typeof window === 'undefined') return; navListener = true
+  addEventListener('popstate', e => {
+    const st = (e.state ?? {}) as { fb?: string; id?: string }
+    const top = modalStack[modalStack.length - 1]
+    if (top && st.id !== top.id) { top.popped = true; top.close(); return }   // «назад» при открытом окне — закрываем его
+    if (!top && st.fb === 'modal') history.back()                              // устаревшая запись закрытого окна — пропускаем
+  })
+}
 export function Modal({ title, onClose, children, drawer }: { title: string; onClose: () => void; children: ReactNode; drawer?: boolean }) {
-  useEffect(() => { const f = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); addEventListener('keydown', f); return () => removeEventListener('keydown', f) }, [onClose])
-  return <div data-modal className="fixed inset-0 z-50 flex bg-black/60" onMouseDown={onClose}><div onMouseDown={e => e.stopPropagation()} className={cx('bg-surface border-line overflow-y-auto', drawer ? 'ml-auto h-full w-full max-w-lg border-l' : 'm-auto w-full max-w-md max-h-[90vh] border rounded-xl')}>
-    <div className="flex items-center justify-between px-4 h-12 border-b border-line sticky top-0 bg-surface"><div className="font-medium">{title}</div><Btn v="ghost" className="!px-2" onClick={onClose}><X size={16} /></Btn></div><div className="p-4 space-y-4">{children}</div></div></div>
+  const close = useRef(onClose); close.current = onClose
+  useEffect(() => {
+    installNav()
+    const me: Entry = { id: Math.random().toString(36).slice(2), close: () => close.current(), popped: false }
+    modalStack.push(me); try { history.pushState({ ...(history.state ?? {}), fb: 'modal', id: me.id }, '') } catch { /* ignore */ }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && modalStack[modalStack.length - 1] === me) close.current() }
+    addEventListener('keydown', esc)
+    return () => {
+      removeEventListener('keydown', esc); const i = modalStack.indexOf(me); if (i >= 0) modalStack.splice(i, 1)
+      if (!me.popped && history.state?.id === me.id) history.back()            // закрыли кнопкой — убираем свою запись
+    }
+  }, [])
+  return createPortal(<div data-modal className="fixed inset-0 z-[70] flex bg-black/70 backdrop-blur-[2px] fb-fade" onMouseDown={onClose}><div onMouseDown={e => e.stopPropagation()} className={cx('bg-surface border-line overflow-y-auto overscroll-contain', drawer ? 'ml-auto h-full w-full max-w-lg border-l fb-slide pb-[env(safe-area-inset-bottom)]' : 'm-auto w-full max-w-md max-h-[90vh] border rounded-2xl fb-pop')}>
+    <div className="flex items-center justify-between px-4 h-12 border-b border-line sticky top-0 bg-surface z-10 pt-[env(safe-area-inset-top)] box-content"><div className="font-medium">{title}</div><Btn v="ghost" className="!px-2" onClick={onClose} aria-label="Закрыть"><X size={16} /></Btn></div><div className="p-4 space-y-4">{children}</div></div></div>, document.body)
 }
 export function Confirm({ title, text, yes = 'Удалить', onYes, onClose }: { title: string; text: string; yes?: string; onYes: () => Promise<any>; onClose: () => void }) {
   const [busy, setBusy] = useState(false)

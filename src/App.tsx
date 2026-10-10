@@ -16,8 +16,10 @@ function Auth() {
   const invited = useState(readRef)[0]
   const [mode, setMode] = useState<'login' | 'reg' | 'forgot' | 'sent' | 'email'>(invited ? 'reg' : 'login'), [f, setF] = useState({ name: '', phone: '', email: '', pass: '', ref: invited })
   const [err, setErr] = useState(''), [busy, setBusy] = useState(false), lost = lostSession()
-  const u = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value }), go = (m: typeof mode) => { setMode(m); setErr('') }
-  const run = (p: Promise<any>, next?: typeof mode) => { setBusy(true); setErr(''); p.then(() => next && setMode(next)).catch(e => setErr(e.message)).finally(() => setBusy(false)) }
+  const u = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value }), go = (m: typeof mode) => { if (m !== mode) history.pushState({ fb: 'auth', mode: m }, ''); setMode(m); setErr('') }
+  // «Назад» на экранах входа/регистрации/восстановления возвращает на предыдущий экран, а не закрывает приложение
+  useEffect(() => { const f = (e: PopStateEvent) => { if (e.state?.fb === 'modal') return; setMode(e.state?.fb === 'auth' ? e.state.mode : (invited ? 'reg' : 'login')); setErr('') }; addEventListener('popstate', f); return () => removeEventListener('popstate', f) }, []) // eslint-disable-line
+  const run = (p: Promise<any>, next?: typeof mode) => { setBusy(true); setErr(''); p.then(() => next && go(next)).catch(e => setErr(e.message)).finally(() => setBusy(false)) }
   const submit = (e: React.FormEvent) => { e.preventDefault(); if (busy) return
     if (mode === 'login') run(api.signInPhone(f.phone, f.pass)); else if (mode === 'email') run(api.signIn(f.email, f.pass))
     else if (mode === 'reg') run(api.signUp(f.name, f.phone, f.pass, f.ref)); else if (mode === 'forgot') run(api.requestReset(f.phone), 'sent') }

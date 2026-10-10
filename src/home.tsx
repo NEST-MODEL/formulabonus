@@ -117,7 +117,7 @@ export function FriendsScreen({ s, back }: { s: Snap; back: () => void }) {
 /* ---------- Профиль ---------- */
 export function ProfileScreen({ s, go, children }: { s: Snap; go: (tab: string) => void; children: ReactNode }) {
   const Row = ({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) => <button onClick={onClick} className="press w-full flex items-center gap-3 p-4 text-left hover:bg-hover"><span className="text-gold">{icon}</span><span className="flex-1 font-medium">{label}</span><ChevronRight size={16} className="text-mute" /></button>
-  return <div className="max-w-lg mx-auto space-y-3">
+  return <div className="max-w-lg mx-auto space-y-3 rise-kids">
     <ScreenHead title="Профиль" />
     <div className="rise card-dark rounded-3xl p-5 flex items-center gap-4"><span className="grid place-items-center w-14 h-14 rounded-full bg-gold text-black text-xl font-bold">{(s.name || 'К')[0].toUpperCase()}</span>
       <span className="min-w-0"><span className="block text-lg font-bold truncate">{s.name}</span><span className="block text-[13px] text-mute">{s.phone || 'Клиент клуба'}</span></span></div>

@@ -3,6 +3,7 @@ import { Check, Minus, Plus, ShoppingCart } from 'lucide-react'
 import { api, Order, Snap } from './api'
 import { kzt, maxBonus, N } from './lib'
 import { Badge, Btn, Card, cx, Empty, Input, Modal, num, toast, useAsync } from './ui'
+import { ScreenHead } from './home'
 
 const STEPS: [string, string][] = [['awaiting_payment', 'Оплата'], ['new', 'Принят'], ['preparing', 'Готовится'], ['ready', 'Готов'], ['done', 'Выдан']]
 export function Shop({ s, goOrders }: { s: Snap; goOrders: () => void }) {
@@ -70,13 +71,13 @@ export function StoreCodes({ s, onCode }: { s: Snap; onCode: (code: string) => v
   const chips: [string, string][] = [['all', 'Все'], ...(cats ?? []).filter(c => s.rewards.some(r => r.cat === c.id)).map(c => [c.id, c.name] as [string, string]), ...(s.rewards.some(r => !r.cat) && (cats ?? []).length ? [['none', 'Другое'] as [string, string]] : [])]
   const shown = s.rewards.filter(r => cat === 'all' || (cat === 'none' ? !r.cat : r.cat === cat))
   const get = (id: string) => { setBusy(id); api.redeem(id).then(onCode).catch(e => toast(e.message, false)).finally(() => setBusy('')) }
-  return <div className="max-w-3xl space-y-3">
-    <div className="flex justify-between items-center"><h1 className="text-2xl font-semibold tracking-tight">Магазин</h1><Badge t="gold">{N(s.balance)} Bonus</Badge></div>
-    <div className="text-[13px] text-mute">Выберите товар, получите 4-значный код и назовите его администратору — Bonus спишутся, остальное оплатите на месте.</div>
-    {chips.length > 1 && <div className="flex gap-1.5 overflow-x-auto pb-1">{chips.map(([k, l]) => <Btn key={k} v={cat === k ? 'primary' : 'secondary'} onClick={() => setCat(k)}>{l}</Btn>)}</div>}
-    <div className="grid sm:grid-cols-2 gap-3">{shown.map(r => <div key={r.id} className="bg-surface border border-line rounded-xl p-4 flex flex-col gap-1.5"><div className="font-medium">{r.title}</div>{r.desc && <div className="text-xs text-mute">{r.desc}</div>}
+  return <div className="max-w-lg mx-auto space-y-3">
+    <ScreenHead title="Магазин" sub="Обменивай бонусы на скидки" right={<span className="rounded-full bg-gold text-black px-3 py-1.5 text-[13px] font-bold">{N(s.balance)} Bonus</span>} />
+    <div className="rise text-[13px] text-mute" style={{ animationDelay: '60ms' }}>Выберите товар, получите 4-значный код и назовите его администратору — Bonus спишутся, остальное оплатите на месте.</div>
+    {chips.length > 1 && <div className="rise flex gap-1.5 overflow-x-auto pb-1 -mx-4 px-4 [touch-action:pan-x_pan-y]" style={{ animationDelay: '100ms' }}>{chips.map(([k, l]) => <Btn key={k} v={cat === k ? 'primary' : 'secondary'} onClick={() => setCat(k)}>{l}</Btn>)}</div>}
+    <div key={cat} className="grid sm:grid-cols-2 gap-3">{shown.map((r, i) => <div key={r.id} style={{ animationDelay: `${140 + Math.min(i, 8) * 55}ms` }} className="rise card-dark rounded-2xl p-4 flex flex-col gap-1.5"><div className="font-medium">{r.title}</div>{r.desc && <div className="text-xs text-mute">{r.desc}</div>}
       <div className="text-[13px]"><b>{kzt(r.price)}</b> <span className="text-mute">· Bonus покроют до {kzt(Math.min(maxBonus(r.price, r.pct), s.balance))}</span></div>
-      <Btn className="mt-1" disabled={busy === r.id} onClick={() => get(r.id)}>Получить код</Btn></div>)}</div>
+      <button disabled={busy === r.id} onClick={() => get(r.id)} className="press mt-2 h-10 rounded-xl bg-gold text-black font-semibold disabled:opacity-50">Получить код</button></div>)}</div>
     {!shown.length && <Empty>В этой категории пока пусто</Empty>}
   </div>
 }

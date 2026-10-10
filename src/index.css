@@ -10,3 +10,9 @@ button,a,tr{transition:background-color .15s,color .15s,border-color .15s}
 @keyframes fb-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 .press{transition:transform .15s ease,background-color .15s,border-color .15s}.press:active{transform:scale(.97)}
 @media (prefers-reduced-motion:reduce){.rise{animation:none}.press:active{transform:none}}
+.fb-fade{animation:fb-fade .18s ease both}.fb-pop{animation:fb-pop .2s cubic-bezier(.2,.7,.2,1) both}.fb-slide{animation:fb-slide .24s cubic-bezier(.2,.7,.2,1) both}
+@keyframes fb-fade{from{opacity:0}}@keyframes fb-pop{from{opacity:0;transform:translateY(8px) scale(.98)}}@keyframes fb-slide{from{transform:translateX(24px);opacity:.6}}
+@media (prefers-reduced-motion:reduce){.fb-fade,.fb-pop,.fb-slide{animation:none}}
+.rise-kids>*{animation:fb-rise .5s cubic-bezier(.2,.7,.2,1) both}
+.rise-kids>*:nth-child(2){animation-delay:60ms}.rise-kids>*:nth-child(3){animation-delay:120ms}.rise-kids>*:nth-child(4){animation-delay:180ms}.rise-kids>*:nth-child(5){animation-delay:240ms}.rise-kids>*:nth-child(n+6){animation-delay:300ms}
+@media (prefers-reduced-motion:reduce){.rise-kids>*{animation:none}}
